@@ -1,0 +1,75 @@
+#!/usr/bin/env zsh
+set -euo pipefail
+
+# Derive the project name from the current directory.
+project_directory="$(pwd)"
+project_name="$(basename "$project_directory")"
+
+claude_project_settings_root="$HOME/.claude_project_settings"
+claude_project_settings="$claude_project_settings_root/$project_name"
+# This will be mounted to /home/node/.claude in the container
+claude_project_dot_dir="$claude_project_settings/claude"
+# This will be mounted to /home/node/.claude.json in the container
+claude_project_dot_json="$claude_project_settings/claude.json"
+# Create a GitHub fine-grained token file for every project and put it in the project settings dir
+gh_project_token_file="$claude_project_settings/.gh_token"
+
+docker_image="claude-code"
+
+run_claude_code() {
+  echo "🚀 Running Claude Code for project '$project_name'..."
+
+  # Create project settings directory if it doesn't exist
+  if [[ ! -d "$claude_project_dot_dir" ]]; then
+    echo -e "\tℹ️ No Claude project settings found for project '$project_name'."
+    echo -e "\t📁 Creating project settings directory..."
+    mkdir -p "$claude_project_dot_dir"
+    touch "$claude_project_dot_json"
+    touch "$gh_project_token_file"
+  else
+    echo -e "\t✅ Found Claude project settings for project '$project_name'."
+  fi
+
+  # Determine which GitHub token to use
+  if [[ -s "$gh_project_token_file" ]]; then
+    gh_token_file="$gh_project_token_file"
+    echo -e "\t✅ Using project-specific GitHub token for project '$project_name'."
+  else
+    echo -e "\tℹ️ No GitHub token found. To use gh CLI, create a fained grained token and save it to:"
+    echo -e "\t👉 $gh_project_token_file"
+    # Create empty token file to prevent mount errors
+    touch "$gh_project_token_file"
+    gh_token_file="$gh_project_token_file"
+  fi
+
+docker run -ti --rm --name="claude-code-$project_name" \
+    --entrypoint "/bin/zsh" \
+    -v "$project_directory:/workspace/$project_name" \
+    -v "$gh_token_file:/home/node/.gh_token" \
+    -v "$claude_project_dot_dir:/home/node/.claude" \
+    -v "$claude_project_dot_json:/home/node/.claude.json" \
+    "$docker_image":latest
+}
+
+build_custom_docker_image(){
+  set +e
+  docker --version &> /dev/null || {
+    echo "❌ Docker is not installed. Please install Docker to use this script."
+    exit 1
+  }
+
+  if ! docker image inspect "$docker_image":latest &> /dev/null; then
+    set -e
+    echo -e "🔧  Building Docker image '$docker_image'..."
+    script_dir="${0:a:h}"
+    echo "🔍  Looking for Dockerfile in '$script_dir'..."
+    (
+      cd "$script_dir/docker"
+      docker build -t "$docker_image":latest .
+    )
+  fi
+}
+
+build_custom_docker_image
+run_claude_code
+

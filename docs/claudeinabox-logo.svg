@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <!-- Background -->
+  <rect width="400" height="400" fill="#1a1a2e"/>
+  
+  <!-- Docker-style container box -->
+  <g id="container">
+    <!-- Main box body -->
+    <rect x="80" y="120" width="240" height="200" rx="8" fill="#2b4c7e" stroke="#4a90e2" stroke-width="4"/>
+    
+    <!-- Box lid/top -->
+    <rect x="75" y="100" width="250" height="30" rx="6" fill="#3d5a80" stroke="#4a90e2" stroke-width="4"/>
+    
+    <!-- Shipping container ridges -->
+    <line x1="120" y1="120" x2="120" y2="320" stroke="#1e3a5f" stroke-width="2"/>
+    <line x1="160" y1="120" x2="160" y2="320" stroke="#1e3a5f" stroke-width="2"/>
+    <line x1="200" y1="120" x2="200" y2="320" stroke="#1e3a5f" stroke-width="2"/>
+    <line x1="240" y1="120" x2="240" y2="320" stroke="#1e3a5f" stroke-width="2"/>
+    <line x1="280" y1="120" x2="280" y2="320" stroke="#1e3a5f" stroke-width="2"/>
+    
+    <!-- Lock mechanism -->
+    <rect x="180" y="310" width="40" height="20" rx="3" fill="#e8833a" stroke="#d16a2a" stroke-width="2"/>
+    <circle cx="200" cy="320" r="5" fill="#1a1a2e"/>
+  </g>
+  
+  <!-- Claude "logo" - abstract AI representation inside box -->
+  <g id="claude-symbol">
+    <!-- Central AI core -->
+    <circle cx="200" cy="200" r="45" fill="#e8833a" opacity="0.9"/>
+    
+    <!-- Neural network nodes -->
+    <circle cx="165" cy="180" r="12" fill="#f4a460" opacity="0.8"/>
+    <circle cx="235" cy="180" r="12" fill="#f4a460" opacity="0.8"/>
+    <circle cx="165" cy="220" r="12" fill="#f4a460" opacity="0.8"/>
+    <circle cx="235" cy="220" r="12" fill="#f4a460" opacity="0.8"/>
+    <circle cx="200" cy="160" r="12" fill="#f4a460" opacity="0.8"/>
+    <circle cx="200" cy="240" r="12" fill="#f4a460" opacity="0.8"/>
+    
+    <!-- Connecting lines -->
+    <line x1="165" y1="180" x2="200" y2="200" stroke="#ffffff" stroke-width="2" opacity="0.5"/>
+    <line x1="235" y1="180" x2="200" y2="200" stroke="#ffffff" stroke-width="2" opacity="0.5"/>
+    <line x1="165" y1="220" x2="200" y2="200" stroke="#ffffff" stroke-width="2" opacity="0.5"/>
+    <line x1="235" y1="220" x2="200" y2="200" stroke="#ffffff" stroke-width="2" opacity="0.5"/>
+    <line x1="200" y1="160" x2="200" y2="200" stroke="#ffffff" stroke-width="2" opacity="0.5"/>
+    <line x1="200" y1="240" x2="200" y2="200" stroke="#ffffff" stroke-width="2" opacity="0.5"/>
+    
+    <!-- Central C for Claude -->
+    <text x="200" y="215" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="#1a1a2e" text-anchor="middle">C</text>
+  </g>
+  
+  <!-- Project name -->
+  <text x="200" y="365" font-family="'Courier New', monospace" font-size="28" font-weight="bold" fill="#4a90e2" text-anchor="middle">ClaudeInABox</text>
+  
+  <!-- Subtitle -->
+  <text x="200" y="385" font-family="'Courier New', monospace" font-size="12" fill="#f4a460" text-anchor="middle">Containerized &amp; Secure</text>
+</svg>
