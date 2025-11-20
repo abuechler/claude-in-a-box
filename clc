@@ -1,23 +1,36 @@
 #!/usr/bin/env zsh
 set -euo pipefail
+version="1.0.0"
 
-# Derive the project name from the current directory.
+script_dir=$(dirname "$(realpath "$0")")
+
 project_directory="$(pwd)"
+# Derive the project name from the directory name, we'll sanitize it later in read_claude_in_a_box_settings
 project_name="$(basename "$project_directory")"
-
+# Contains files and settings for all projects
 claude_project_settings_root="$HOME/.claude_project_settings"
+# Project specific settings directory
 claude_project_settings="$claude_project_settings_root/$project_name"
-# This will be mounted to /home/node/.claude in the container
+# Claude settings directory for this project
 claude_project_dot_dir="$claude_project_settings/claude"
-# This will be mounted to /home/node/.claude.json in the container
+# Claude settings JSON file for this project
 claude_project_dot_json="$claude_project_settings/claude.json"
-# Create a GitHub fine-grained token file for every project and put it in the project settings dir
+# Shell history file for this project, see Dockerfile
+claude_project_shell_history_dir="$claude_project_settings/shell_history"
+claude_project_shell_history_file="$claude_project_shell_history_dir/.zsh_history"
+# Generic Claude In A Box settings for all projects. If this folder contains an init.sh script that is executable, it will be run at container startup.
+claude_in_a_box_global_settings="$HOME/.claude-in-a-box"
+# GitHub token for this project, if it exists Git credentials will be generated.
 gh_project_token_file="$claude_project_settings/.gh_token"
 
-docker_image="claude-code"
+docker_image="claude-in-a-box"
 
-run_claude_code() {
-  echo "🚀 Running Claude Code for project '$project_name'..."
+read_claude_in_a_box_settings() {
+  # Since we start from the current PWD, let's do some sanity checks.
+  if [[ "$project_directory" == "$HOME" || "$project_directory" == "/" || ! -d "$project_directory/.git" ]]; then
+    echo "❌ Refusing to run in \$HOME, root or any directory that is not a Git project."
+    exit 1
+  fi
 
   # Create project settings directory if it doesn't exist
   if [[ ! -d "$claude_project_dot_dir" ]]; then
@@ -26,8 +39,10 @@ run_claude_code() {
     mkdir -p "$claude_project_dot_dir"
     touch "$claude_project_dot_json"
     touch "$gh_project_token_file"
+    mkdir -p "$claude_project_shell_history_dir"
+    touch "$claude_project_shell_history_file"
   else
-    echo -e "\t✅ Found Claude project settings for project '$project_name'."
+    echo -e "\t✅ Found Claude project settings in '$claude_project_dot_dir'."
   fi
 
   # Determine which GitHub token to use
@@ -42,34 +57,86 @@ run_claude_code() {
     gh_token_file="$gh_project_token_file"
   fi
 
-docker run -ti --rm --name="claude-code-$project_name" \
-    --entrypoint "/bin/zsh" \
-    -v "$project_directory:/workspace/$project_name" \
-    -v "$gh_token_file:/home/node/.gh_token" \
-    -v "$claude_project_dot_dir:/home/node/.claude" \
-    -v "$claude_project_dot_json:/home/node/.claude.json" \
-    "$docker_image":latest
+  if [[ ! -d "$claude_in_a_box_global_settings" ]]; then
+    echo -e "\tℹ️ No Claude user settings found."
+    echo -e "\t📁 Creating user settings directory in $HOME/.claude_user_settings..."
+    mkdir -p "$claude_in_a_box_global_settings"
+  fi
+
+  if [[ ! -f .mcp.json ]]; then
+    echo -e "\tℹ️ No .mcp.json file found in project directory. Creating one with Playwright settings..."
+    cat <<-'EOF' >"$project_directory/.mcp.json"
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest",
+        "--headless",
+        "--browser",
+        "firefox"
+      ]
+    }
+  }
+}
+EOF
+    echo -e "\t💡You might want to add the $project_directory/.mcp.json file to  Git and commit it."
+  else
+    echo -e "\t✅ Found .mcp.json file in project directory."
+  fi
+
+  old_project_name="$claude_project_settings_root/project_name"
+  if [[ -d "$old_project_name" ]]; then
+    echo -e "\tℹ️ Found old project settings directory. Migrating to new structure..."
+    mv "$old_project_name"/* "$claude_project_settings"
+  fi
+
+  if [[ -f "$project_directory/.claude_in_a_box" ]]; then
+    echo -e "\t✅ Found Claude In A Box settings in project directory."
+  else
+    echo -e "\tℹ️ No .claude_in_a_box file found in project directory. Creating one..."
+    safe_project_name=$(echo "$project_name" | tr -cd 'A-Za-z0-9_-')
+    echo "project_name=\"$safe_project_name\"" >"$project_directory/.claude_in_a_box"
+    echo -e "\t💡You might want to add the $project_directory/.claude_in_a_box file to  Git and commit it."
+  fi
+  source "$project_directory/.claude_in_a_box"
 }
 
-build_custom_docker_image(){
+run_claude_code() {
+  echo "🚀 Running Claude Code for project '$project_name'..."
+  read_claude_in_a_box_settings
+  docker run -ti --rm --name="claude-code-$project_name" \
+    --entrypoint "/bin/zsh" \
+    -v "$project_directory:/workspace" \
+    -v "$gh_token_file:/home/node/.gh_token:ro" \
+    -v "$claude_project_dot_dir:/home/node/.claude" \
+    -v "$claude_project_dot_json:/home/node/.claude.json" \
+    -v "$claude_project_shell_history_dir:/home/node/.shell_history" \
+    -v "$claude_in_a_box_global_settings:/home/node/.claude-in-a-box:ro" \
+    --name "claude-in-a-box-$project_name" \
+    "$docker_image":$version
+}
+
+build_custom_docker_image() {
   set +e
-  docker --version &> /dev/null || {
+  docker --version &>/dev/null || {
     echo "❌ Docker is not installed. Please install Docker to use this script."
     exit 1
   }
 
-  if ! docker image inspect "$docker_image":latest &> /dev/null; then
+  if ! docker image inspect "$docker_image":$version &>/dev/null; then
     set -e
     echo -e "🔧  Building Docker image '$docker_image'..."
-    script_dir="${0:a:h}"
+    current_timezone="$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')"
     echo "🔍  Looking for Dockerfile in '$script_dir'..."
     (
       cd "$script_dir/docker"
-      docker build -t "$docker_image":latest .
+      # Pass the timezone as a build argument
+      docker build --build-arg TZ="$current_timezone" -t "$docker_image":$version .
     )
   fi
 }
 
 build_custom_docker_image
 run_claude_code
-
