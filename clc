@@ -37,6 +37,7 @@ read_claude_in_a_box_settings() {
     echo -e "\tℹ️ No Claude project settings found for project '$project_name'."
     echo -e "\t📁 Creating project settings directory..."
     mkdir -p "$claude_project_dot_dir"
+    cp "$script_dir/examples/claude-default-config.json" "$claude_project_dot_json"
     touch "$claude_project_dot_json"
     touch "$gh_project_token_file"
     mkdir -p "$claude_project_shell_history_dir"
