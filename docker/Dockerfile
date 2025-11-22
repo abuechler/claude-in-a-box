@@ -1,20 +1,20 @@
-# From https://github.com/anthropics/claude-code/blob/main/.devcontainer/Dockerfile
-FROM node:20
-
+FROM node:20-trixie
 
 ARG TZ
+ARG CLAUDE_CODE_VERSION=latest
+ARG USERNAME=node
+
+ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ="$TZ"
 
-ARG CLAUDE_CODE_VERSION=latest
-
 # Use bash instead of sh
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
-ARG CLAUDE_CODE_VERSION=latest
 
 # Install basic development tools and iptables/ipset
 RUN apt-get update && apt-get install -y --no-install-recommends \
   less \
+  tree \
   git \
   procps \
   sudo \
@@ -38,13 +38,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN mkdir -p /usr/local/share/npm-global && \
   chown -R node:node /usr/local/share
 
-ARG USERNAME=node
-
-# Persist bash history.
-RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
-  && mkdir /commandhistory \
-  && touch /commandhistory/.bash_history \
-  && chown -R $USERNAME /commandhistory
 
 # Set `DEVCONTAINER` environment variable to help with orientation
 ENV DEVCONTAINER=true
@@ -62,7 +55,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
   rm "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb"
 
 # Set up non-root user
-USER node
+USER ${USERNAME}
 
 # Install global packages
 ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
@@ -70,6 +63,7 @@ ENV PATH=$PATH:/usr/local/share/npm-global/bin
 
 # Set the default shell to zsh rather than sh
 ENV SHELL=/bin/zsh
+ENV HISTFILE=/home/${USERNAME}/.shell_history/.zsh_history
 
 # Set the default editor and visual
 ENV EDITOR=nano
@@ -77,13 +71,15 @@ ENV VISUAL=nano
 
 # Default powerline10k theme
 ARG ZSH_IN_DOCKER_VERSION=1.2.0
-RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/v${ZSH_IN_DOCKER_VERSION}/zsh-in-docker.sh)" -- \
+RUN <<EOF \
+   sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/v${ZSH_IN_DOCKER_VERSION}/zsh-in-docker.sh)" -- \
   -p git \
   -p fzf \
   -a "source /usr/share/doc/fzf/examples/key-bindings.zsh" \
   -a "source /usr/share/doc/fzf/examples/completion.zsh" \
-  -a "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
+  -a "export PROMPT_COMMAND='history -a' && export HISTFILE=${HISTFILE}" \
   -x
+EOF
 
 # Install Claude
 RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
@@ -92,13 +88,29 @@ RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 # Copy and set up firewall script
 COPY init-firewall.sh /usr/local/bin/
 USER root
-RUN chmod +x /usr/local/bin/init-firewall.sh && \
-  echo "node ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/node-firewall && \
+RUN <<EOF
+  chmod +x /usr/local/bin/init-firewall.sh
+  echo "node ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/node-firewall
   chmod 0440 /etc/sudoers.d/node-firewall
-USER node
+EOF
+USER ${USERNAME}
 
 
 ## Customized parts below ##
+# Install Playwright MCP Server
+USER root
+ENV PLAYWRIGHT_BROWSERS_PATH=/home/node/.playwright-browsers
+RUN <<EOF
+    npx -y playwright install-deps
+EOF
+
+USER ${USERNAME}
+RUN <<EOF
+    npm install -g @playwright/test
+    npx -y playwright install firefox
+    npx playwright install --list
+EOF
+
 # Install dependencies for GraalVM native-image
 USER root
 RUN <<EOF
@@ -110,21 +122,33 @@ RUN <<EOF
     rm -rf /var/lib/apt/lists/*
 EOF
 
-# Install SDKMAN and GraalVM, this needs to happen after the powerline10k setup to ensure zshrc changes are not overwritten.
-USER node
-COPY --chmod=0755 sdkman.sh /home/node/.sdkman-install.sh
+USER ${USERNAME}
+# ZSH customizations and project specific initializations
 RUN <<EOF
-    /home/node/.sdkman-install.sh
+  echo "[[ -s /home/${USERNAME}/.gh_token ]] && export GH_TOKEN=\"$(cat /home/${USERNAME}/.gh_token)\"" >> /home/${USERNAME}/.oh-my-zsh/custom/vars.zsh
+  echo '# The space at the end of the commands makes shell command completion work with an alias"' >> /home/${USERNAME}/.oh-my-zsh/custom/aliases.zsh
+  echo 'alias claude-yolo="claude --dangerously-skip-permissions "' >> /home/${USERNAME}/.oh-my-zsh/custom/aliases.zsh
+  echo '# Project specific configurations for claude-in-box' >> /home/${USERNAME}/.zshrc
+  echo "[[ -x /home/${USERNAME}/.claude-in-a-box/init.sh ]] && /home/${USERNAME}/.claude-in-a-box/init.sh" >> /home/${USERNAME}/.zshrc
+EOF
+
+# Install SDKMAN and GraalVM, this needs to happen after the powerline10k setup to ensure zshrc changes are not overwritten.
+COPY --chmod=0755 sdkman.sh /home/${USERNAME}/.sdkman-install.sh
+RUN <<EOF
+    /home/${USERNAME}/.sdkman-install.sh
     # Disable sdkman interactive prompts
-    sed -i 's/sdkman_auto_answer=false/sdkman_auto_answer=true/' /home/node/.sdkman/etc/config
-    source /home/node/.sdkman/bin/sdkman-init.sh
-    echo '[[ -s "/home/node/.gh_token" ]] && export GH_TOKEN="$(cat /home/node/.gh_token)"' >> /home/node/.zshrc
-    echo '#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!' >> /home/node/.zshrc
-    echo '[[ -s "/home/node/.sdkman/bin/sdkman-init.sh" ]] && source "/home/node/.sdkman/bin/sdkman-init.sh"' >> /home/node/.zshrc
+    sed -i 's/sdkman_auto_answer=false/sdkman_auto_answer=true/' /home/${USERNAME}/.sdkman/etc/config
+    # Cannot be used with 'set -u' enabled
+    set +u
+    source /home/${USERNAME}/.sdkman/bin/sdkman-init.sh
+    echo '#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!' >> /home/${USERNAME}/.zshrc
+    echo "[[ -s /home/${USERNAME}/.sdkman/bin/sdkman-init.sh ]] && source /home/${USERNAME}/.sdkman/bin/sdkman-init.sh" >>/home/${USERNAME}/.zshrc
     sdk install java 24.0.2-graalce
     sdk install java 21.0.8-tem
     sdk install quarkus 3.29.0
     sdk default java 24.0.2-graalce
+    set -u
     # Re-enable sdkman interactive prompts
-    sed -i 's/sdkman_auto_answer=true/sdkman_auto_answer=false/' /home/node/.sdkman/etc/config
+    sed -i 's/sdkman_auto_answer=true/sdkman_auto_answer=false/' /home/${USERNAME}/.sdkman/etc/config
 EOF
+

@@ -24,11 +24,10 @@ Java development tools (GraalVM), and Quarkus framework support.
 
 ## Prerequisites
 
-Before using this Docker environment, ensure you have the following installed:
+Before using this Docker environment, ensure you have the following ready:
 
 - **Docker** - [Install Docker](https://docs.docker.com/get-docker/) for your platform
-- **ZSH** - The `clc` launcher script requires ZSH shell
-- **GitHub Token** (optional) - For using the `gh` CLI tool
+- [**A fine grained GitHub Token**](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token) (optional) - For using the `gh` CLI tool
 
 ## Installation and Usage
 
@@ -65,11 +64,35 @@ clc
 ```
 
 The first time you run `clc`, it will:
+
 - Automatically build the Docker image (this may take several minutes)
 - Create per-project settings in `~/.claude_project_settings/<project-name>/`
 - Launch a ZSH shell inside the Docker container with your project mounted
+- **Now you can run `claude-yolo` which is an alias for `claude --allow-dangerously-skip-permissions`**
 
-### 4. GitHub Token Configuration (Optional)
+> 🧨 Running claude in YOLO mode skips any permission prompts, use it only inside a trusted environment, like inside a
+> Docker container. If you want to run claude without YOLO mode, just run `claude` instead of `claude-yolo`. But you
+> will note that you cannot let claude do long-running tasks without watching them, because you will certainly miss
+> permission prompts.
+
+### 4. Configuration
+
+#### Per-Project Settings
+
+Each project gets its own settings directory at `~/.claude_project_settings/<project-name>/` containing:
+
+- `claude/` - Claude-specific configuration and history
+- `claude.json` - Claude settings file
+- `.gh_token` - GitHub token for this project (optional)
+
+#### Global Settings
+
+The `~/.claude-in-a-box/` directory (in your $HOME directory) is mounted read-only into all containers. Use this for:
+
+- **Automatic initialization**: Create an executable `init.sh` script that runs at container startup, useful for setting up git credentials etc. See the example in [`examples/init.sh`](examples/init.sh).
+- **Shared configuration**: Files that should be available across all projects
+
+#### GitHub Token Setup
 
 To use the `gh` CLI tool, create a GitHub fine-grained token and save it to:
 
@@ -78,6 +101,23 @@ To use the `gh` CLI tool, create a GitHub fine-grained token and save it to:
 ```
 
 The token will be automatically loaded when you start the container.
+
+#### Setting Up Git Credentials
+
+Use the provided example script to set up git credentials automatically:
+
+```zsh
+# Copy the example init script to your global settings
+cp examples/init.sh ~/.claude-in-a-box/
+chmod +x ~/.claude-in-a-box/init.sh
+
+# Create a GitHub token file (either globally or per-project)
+echo "your_github_token" > ~/.gh_token
+# OR for per-project:
+echo "your_github_token" > ~/.claude_project_settings/<project-name>/.gh_token
+```
+
+The init script will configure git credentials automatically when the container starts.
 
 ### 5. Initialize Firewall (Optional)
 
@@ -89,3 +129,12 @@ sudo /usr/local/bin/init-firewall.sh
 
 This limits network access to approved domains (GitHub, npm, Anthropic APIs, etc.) for enhanced security.
 
+
+### 6. Update Claude In A Box
+
+To update to the latest version and start Claude In A Box. This will build a new Docker image:
+
+```zsh
+git pull origin main
+clc
+```
