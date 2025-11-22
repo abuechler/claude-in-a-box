@@ -120,8 +120,8 @@ run_claude_code() {
 
 build_custom_docker_image() {
   set +e
-  docker --version &>/dev/null || {
-    echo "❌ Docker is not installed. Please install Docker to use this script."
+  docker info &>/dev/null || {
+    echo "❌ Docker is not installed or not running. Please install or start Docker to use this script."
     exit 1
   }
 

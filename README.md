@@ -108,7 +108,8 @@ The token will be automatically loaded when you start the container.
 Use the provided example script to set up git credentials automatically:
 
 ```zsh
-# Copy the example init script to your global settings
+# Copy the example init script to your global settings, make sure to 
+# replace placeholders!
 cp examples/init.sh ~/.claude-in-a-box/
 chmod +x ~/.claude-in-a-box/init.sh
 
