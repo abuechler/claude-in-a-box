@@ -10,7 +10,7 @@ elif [[ -n "${GH_TOKEN:-}" ]]; then
 fi
 
 if [[ -n "${token}" ]]; then
-  echo "https://abuechler:${token}@github.com" >~/.git-credentials
+  echo "https://your_github_username:${token}@github.com" >~/.git-credentials
   chmod 600 ~/.git-credentials
   git config --global credential.helper store
   echo -e "\t✅ Git credentials configured successfully"

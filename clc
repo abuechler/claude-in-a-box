@@ -59,7 +59,7 @@ read_claude_in_a_box_settings() {
 
   if [[ ! -d "$claude_in_a_box_global_settings" ]]; then
     echo -e "\tℹ️ No Claude user settings found."
-    echo -e "\t📁 Creating user settings directory in $HOME/.claude_user_settings..."
+    echo -e "\t📁 Creating user settings directory in $claude_in_a_box_global_settings"
     mkdir -p "$claude_in_a_box_global_settings"
   fi
 
@@ -81,7 +81,7 @@ read_claude_in_a_box_settings() {
   }
 }
 EOF
-    echo -e "\t💡You might want to add the $project_directory/.mcp.json file to  Git and commit it."
+    echo -e "\t💡You might want to add the $project_directory/.mcp.json file to Git and commit it."
   else
     echo -e "\t✅ Found .mcp.json file in project directory."
   fi
@@ -89,7 +89,7 @@ EOF
   old_project_name="$claude_project_settings_root/project_name"
   if [[ -d "$old_project_name" ]]; then
     echo -e "\tℹ️ Found old project settings directory. Migrating to new structure..."
-    mv "$old_project_name"/* "$claude_project_settings"
+    mv "$old_project_name" "$claude_project_settings"
   fi
 
   if [[ -f "$project_directory/.claude_in_a_box" ]]; then
@@ -98,7 +98,7 @@ EOF
     echo -e "\tℹ️ No .claude_in_a_box file found in project directory. Creating one..."
     safe_project_name=$(echo "$project_name" | tr -cd 'A-Za-z0-9_-')
     echo "project_name=\"$safe_project_name\"" >"$project_directory/.claude_in_a_box"
-    echo -e "\t💡You might want to add the $project_directory/.claude_in_a_box file to  Git and commit it."
+    echo -e "\t💡You might want to add the $project_directory/.claude_in_a_box file to Git and commit it."
   fi
   source "$project_directory/.claude_in_a_box"
 }
@@ -106,7 +106,7 @@ EOF
 run_claude_code() {
   echo "🚀 Running Claude Code for project '$project_name'..."
   read_claude_in_a_box_settings
-  docker run -ti --rm --name="claude-code-$project_name" \
+  docker run -ti --rm --name "claude-in-a-box-$project_name" \
     --entrypoint "/bin/zsh" \
     -v "$project_directory:/workspace" \
     -v "$gh_token_file:/home/node/.gh_token:ro" \
@@ -114,7 +114,6 @@ run_claude_code() {
     -v "$claude_project_dot_json:/home/node/.claude.json" \
     -v "$claude_project_shell_history_dir:/home/node/.shell_history" \
     -v "$claude_in_a_box_global_settings:/home/node/.claude-in-a-box:ro" \
-    --name "claude-in-a-box-$project_name" \
     "$docker_image":$version
 }
 

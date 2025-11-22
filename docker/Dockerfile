@@ -106,7 +106,7 @@ EOF
 
 USER ${USERNAME}
 RUN <<EOF
-    npm -g install @playwright/test
+    npm install -g @playwright/test
     npx -y playwright install firefox
     npx playwright install --list
 EOF
