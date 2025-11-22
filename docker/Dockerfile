@@ -12,27 +12,32 @@ SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
 
 # Install basic development tools and iptables/ipset
-RUN apt-get update && apt-get install -y --no-install-recommends \
-  less \
-  tree \
-  git \
-  procps \
-  sudo \
-  fzf \
-  zsh \
-  man-db \
-  unzip \
-  gnupg2 \
-  gh \
-  iptables \
-  ipset \
-  iproute2 \
-  dnsutils \
-  aggregate \
-  jq \
-  nano \
-  vim \
-  && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN <<EOF
+  apt-get update -yqq
+  apt-get upgrade -yqq
+  apt-get install -yqq --no-install-recommends \
+    less \
+    tree \
+    git \
+    procps \
+    sudo \
+    fzf \
+    zsh \
+    man-db \
+    unzip \
+    gnupg2 \
+    gh \
+    iptables \
+    ipset \
+    iproute2 \
+    dnsutils \
+    aggregate \
+    jq \
+    nano \
+    vim
+  apt-get clean
+  rm -rf /var/lib/apt/lists/*
+EOF
 
 # Ensure default node user has access to /usr/local/share
 RUN mkdir -p /usr/local/share/npm-global && \
