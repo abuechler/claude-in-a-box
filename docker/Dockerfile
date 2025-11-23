@@ -113,7 +113,6 @@ USER ${USERNAME}
 RUN <<EOF
     npm install -g @playwright/test
     npx -y playwright install firefox
-    npx playwright install --list
 EOF
 
 # Install dependencies for GraalVM native-image

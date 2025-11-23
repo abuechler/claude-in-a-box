@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 set -euo pipefail
-version="1.0.0"
+version="1.0.1"
 
 script_dir=$(dirname "$(realpath "$0")")
 
@@ -34,16 +34,20 @@ read_claude_in_a_box_settings() {
 
   # Create project settings directory if it doesn't exist
   if [[ ! -d "$claude_project_dot_dir" ]]; then
-    echo -e "\tℹ️ No Claude project settings found for project '$project_name'."
     echo -e "\t📁 Creating project settings directory..."
     mkdir -p "$claude_project_dot_dir"
-    cp "$script_dir/examples/claude-default-config.json" "$claude_project_dot_json"
-    touch "$claude_project_dot_json"
-    touch "$gh_project_token_file"
-    mkdir -p "$claude_project_shell_history_dir"
-    touch "$claude_project_shell_history_file"
   else
     echo -e "\t✅ Found Claude project settings in '$claude_project_dot_dir'."
+  fi
+
+  if [[ ! -f "$claude_project_dot_json" ]]; then
+    echo -e "\t📁 Creating default config .claude.json."
+    cp "$script_dir/init_config/claude-default-config.json" "$claude_project_dot_json"
+  fi
+
+  mkdir -p "$claude_project_shell_history_dir"
+  if [[ ! -f "$claude_project_shell_history_file" ]]; then
+    touch "$claude_project_shell_history_file"
   fi
 
   # Determine which GitHub token to use
@@ -59,32 +63,14 @@ read_claude_in_a_box_settings() {
   fi
 
   if [[ ! -d "$claude_in_a_box_global_settings" ]]; then
-    echo -e "\tℹ️ No Claude user settings found."
     echo -e "\t📁 Creating user settings directory in $claude_in_a_box_global_settings"
     mkdir -p "$claude_in_a_box_global_settings"
   fi
 
   if [[ ! -f .mcp.json ]]; then
     echo -e "\tℹ️ No .mcp.json file found in project directory. Creating one with Playwright settings..."
-    cat <<-'EOF' >"$project_directory/.mcp.json"
-{
-  "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@playwright/mcp@latest",
-        "--headless",
-        "--browser",
-        "firefox"
-      ]
-    }
-  }
-}
-EOF
+    cp "$script_dir/init_config/mcp.json" "$project_directory/.mcp.json"
     echo -e "\t💡You might want to add the $project_directory/.mcp.json file to Git and commit it."
-  else
-    echo -e "\t✅ Found .mcp.json file in project directory."
   fi
 
   old_project_name="$claude_project_settings_root/project_name"
@@ -94,7 +80,7 @@ EOF
   fi
 
   if [[ -f "$project_directory/.claude_in_a_box" ]]; then
-    echo -e "\t✅ Found Claude In A Box settings in project directory."
+    echo -e "\t✅ Found .claude_in_a_box settings in project directory."
   else
     echo -e "\tℹ️ No .claude_in_a_box file found in project directory. Creating one..."
     safe_project_name=$(echo "$project_name" | tr -cd 'A-Za-z0-9_-')
@@ -133,7 +119,7 @@ build_custom_docker_image() {
     (
       cd "$script_dir/docker"
       # Pass the timezone as a build argument
-      docker build --build-arg TZ="$current_timezone" -t "$docker_image":$version .
+      docker build --no-cache --build-arg TZ="$current_timezone" -t "$docker_image":$version .
     )
   fi
 }
