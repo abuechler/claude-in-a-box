@@ -142,6 +142,7 @@ build_custom_docker_image() {
       docker build --no-cache --build-arg TZ="$current_timezone" -t "$docker_image":$version .
     )
   fi
+  set -e
 }
 
 build_custom_docker_image
