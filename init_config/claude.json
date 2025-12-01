@@ -1,0 +1,25 @@
+{
+  "installMethod": "unknown",
+  "autoUpdates": true,
+  "cachedStatsigGates": {
+    "tengu_tool_pear": false,
+    "tengu_disable_bypass_permissions_mode": false
+  },
+  "firstStartTime": null,
+  "sonnet45MigrationComplete": true,
+  "userID": null,
+  "cachedChangelog": null,
+  "changelogLastFetched": 0,
+  "projects": {
+    "/workspace": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false
+    }
+  }
+}

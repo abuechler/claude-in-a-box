@@ -1,4 +1,29 @@
 #!/usr/bin/env zsh
+###########################################################
+# Claude In A Box - Command Line Launcher
+#
+# Basically launches Claude Code in a Docker container and mounts the project
+# directory plus some settings. Unfortunately Claude Code doesn't store
+# settings in a way that is easy to work with, there are several locations,
+# from the container POV they are:
+#
+# - $HOME/.claude
+# - $HOME/.claude/settings.json
+# - $HOME/.claude.json
+# - <project>/.claude/settings.json
+# - <project>/.claude/settings.local.json
+#
+# Those inside the project directory are easy to handle, we can just add them
+# to Git if we want to. The $HOME/.claude directory with the
+# $HOME/.claude/settings.json is easy too, since the settings.json is simple
+# and doesn't need to contain generated data, or even secrets.
+#
+# The tricky part is actually the $HOME/.claude.json file, if we just mount an
+# empty file, claude code will refuse to start and report a corrupted settings
+# file. Which it can fix by itself, but still it is ugly. Generating one is
+# possible, but should we really? Let's see how brittle that is and generate
+# one for now.
+##########################################################
 set -euo pipefail
 version="1.0.1"
 
@@ -9,13 +34,13 @@ project_directory="$(pwd)"
 project_name="$(basename "$project_directory")"
 # Contains files and settings for all projects
 claude_project_settings_root="$HOME/.claude_project_settings"
-# Project specific settings directory
+# Project specific settings directory => All the stuff we want to persist per project across container runs
 claude_project_settings="$claude_project_settings_root/$project_name"
-# Claude settings directory for this project
+# Claude settings directory for this project => Mounted to /home/node/.claude in the container
 claude_project_dot_dir="$claude_project_settings/claude"
-# Claude settings JSON file for this project
+# Claude settings JSON file for this project => Mounted to /home/node/.claude.json in the container
 claude_project_dot_json="$claude_project_settings/claude.json"
-# Shell history file for this project, see Dockerfile
+# Shell history file for this project, see Dockerfile => There's going to be intermediate files in this dir as well, that's why we put all of them in a separate dir.
 claude_project_shell_history_dir="$claude_project_settings/shell_history"
 claude_project_shell_history_file="$claude_project_shell_history_dir/.zsh_history"
 # Generic Claude In A Box settings for all projects. If this folder contains an init.sh script that is executable, it will be run at container startup.
@@ -26,7 +51,7 @@ gh_project_token_file="$claude_project_settings/.gh_token"
 docker_image="claude-in-a-box"
 
 read_claude_in_a_box_settings() {
-  # Since we start from the current PWD, let's do some sanity checks.
+  # We're assuming that claude-in-a-box should be started from the current directory, let's do some sanity checks.
   if [[ "$project_directory" == "$HOME" || "$project_directory" == "/" || ! -d "$project_directory/.git" ]]; then
     echo "❌ Refusing to run in \$HOME, root or any directory that is not a Git project."
     exit 1
@@ -36,13 +61,14 @@ read_claude_in_a_box_settings() {
   if [[ ! -d "$claude_project_dot_dir" ]]; then
     echo -e "\t📁 Creating project settings directory..."
     mkdir -p "$claude_project_dot_dir"
+    cp "$script_dir/init_config/settings.json" "$claude_project_dot_dir"
+    # Generate a unique userID (64 hex chars) using only default tools
+    # available on macOS and Linux, see comments at the beginning of this script.
+    user_id=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
+    # Copy claude.json and update the userID field using sed
+    sed "s/\"userID\": null/\"userID\": \"$user_id\"/" "$script_dir/init_config/claude.json" >"$claude_project_dot_json"
   else
     echo -e "\t✅ Found Claude project settings in '$claude_project_dot_dir'."
-  fi
-
-  if [[ ! -f "$claude_project_dot_json" ]]; then
-    echo -e "\t📁 Creating default config .claude.json."
-    cp "$script_dir/init_config/claude-default-config.json" "$claude_project_dot_json"
   fi
 
   mkdir -p "$claude_project_shell_history_dir"
@@ -71,12 +97,6 @@ read_claude_in_a_box_settings() {
     echo -e "\tℹ️ No .mcp.json file found in project directory. Creating one with Playwright settings..."
     cp "$script_dir/init_config/mcp.json" "$project_directory/.mcp.json"
     echo -e "\t💡You might want to add the $project_directory/.mcp.json file to Git and commit it."
-  fi
-
-  old_project_name="$claude_project_settings_root/project_name"
-  if [[ -d "$old_project_name" ]]; then
-    echo -e "\tℹ️ Found old project settings directory. Migrating to new structure..."
-    mv "$old_project_name" "$claude_project_settings"
   fi
 
   if [[ -f "$project_directory/.claude_in_a_box" ]]; then
