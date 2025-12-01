@@ -48,8 +48,10 @@ RUN mkdir -p /usr/local/share/npm-global && \
 ENV DEVCONTAINER=true
 
 # Create workspace and config directories and set permissions
-RUN mkdir -p /workspace /home/node/.claude && \
+RUN <<EOT
+  mkdir -p /workspace /home/node/.claude
   chown -R node:node /workspace /home/node/.claude
+EOT
 
 WORKDIR /workspace
 
