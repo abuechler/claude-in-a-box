@@ -58,7 +58,13 @@ read_claude_in_a_box_settings() {
   fi
 
   # Create project settings directory if it doesn't exist
-  if [[ ! -d "$claude_project_dot_dir" ]]; then
+  if [[ -d "$claude_project_dot_dir" ]]; then
+    echo -e "\t✅ Found Claude project settings in '$claude_project_dot_dir'."
+    # Add settings file on existing projects if missing
+    if [[ ! -f "$claude_project_dot_json/settings.json" ]]; then
+      cp "$script_dir/init_config/settings.json" "$claude_project_dot_dir"
+    fi
+  else
     echo -e "\t📁 Creating project settings directory..."
     mkdir -p "$claude_project_dot_dir"
     cp "$script_dir/init_config/settings.json" "$claude_project_dot_dir"
@@ -67,8 +73,6 @@ read_claude_in_a_box_settings() {
     user_id=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
     # Copy claude.json and update the userID field using sed
     sed "s/\"userID\": null/\"userID\": \"$user_id\"/" "$script_dir/init_config/claude.json" >"$claude_project_dot_json"
-  else
-    echo -e "\t✅ Found Claude project settings in '$claude_project_dot_dir'."
   fi
 
   mkdir -p "$claude_project_shell_history_dir"
