@@ -28,9 +28,7 @@ Java development tools (GraalVM), and Quarkus framework support.
 Before using this Docker environment, ensure you have the following ready:
 
 - **Docker** - [Install Docker](https://docs.docker.com/get-docker/) for your platform
-- [**A fine-grained GitHub Token
-  **](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token) (
-  optional) - For using the `gh` CLI tool
+- **[A fine-grained GitHub Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token)** - Optional, for using the `gh` CLI tool
 
 ## Installation and Usage
 
