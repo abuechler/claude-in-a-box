@@ -28,7 +28,9 @@ Java development tools (GraalVM), and Quarkus framework support.
 Before using this Docker environment, ensure you have the following ready:
 
 - **Docker** - [Install Docker](https://docs.docker.com/get-docker/) for your platform
-- [**A fine grained GitHub Token**](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token) (optional) - For using the `gh` CLI tool
+- [**A fine-grained GitHub Token
+  **](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token) (
+  optional) - For using the `gh` CLI tool
 
 ## Installation and Usage
 
@@ -44,7 +46,7 @@ cd claude-in-a-box
 For ZSH users, add the script directory to your PATH by adding this line to your `~/.zshrc`:
 
 ```zsh
-# Add claude-code clc script to PATH
+# Add Claude In A Box clc script to PATH
 export PATH="$PATH:/path/to/claude-in-a-box"
 ```
 
@@ -90,7 +92,8 @@ Each project gets its own settings directory at `~/.claude_project_settings/<pro
 
 The `~/.claude-in-a-box/` directory (in your $HOME directory) is mounted read-only into all containers. Use this for:
 
-- **Automatic initialization**: Create an executable `init.sh` script that runs at container startup, useful for setting up git credentials etc. See the example in [`examples/init.sh`](examples/init.sh).
+- **Automatic initialization**: Create an executable `init.sh` script that runs at container startup, useful for setting
+  up git credentials etc. See the example in [`examples/init.sh`](examples/init.sh).
 - **Shared configuration**: Files that should be available across all projects
 
 #### GitHub Token Setup
@@ -108,8 +111,8 @@ The token will be automatically loaded when you start the container.
 Use the provided example script to set up git credentials automatically:
 
 ```zsh
-# Copy the example init script to your global settings, make sure to 
-# replace placeholders!
+# Copy the example init script to your global settings
+# Edit init.sh and replace YOUR_NAME and YOUR_EMAIL with your details
 cp examples/init.sh ~/.claude-in-a-box/
 chmod +x ~/.claude-in-a-box/init.sh
 
@@ -123,7 +126,12 @@ The init script will configure git credentials automatically when the container 
 
 ### 5. Initialize Firewall (Optional)
 
-Inside the container, you can initialize the network firewall to restrict outbound access:
+> ⚠️ Although this is optional, this step is highly recommended!
+
+#### Linux
+
+Inside the container, you can initialize the network firewall to restrict outbound access, if your setup allows
+modifications of the host's firewall rules.
 
 ```zsh
 sudo /usr/local/bin/init-firewall.sh
@@ -131,6 +139,12 @@ sudo /usr/local/bin/init-firewall.sh
 
 This limits network access to approved domains (GitHub, npm, Anthropic APIs, etc.) for enhanced security.
 
+#### macOS
+
+On macOS there is no `iptables` support, a user-friendly way to manage the firewall is by
+installing [Little Snitch](https://www.obdev.at/products/littlesnitch/index.html), which is totally worth the money. If
+you've installed it, make sure to delete any global allow rule for the Docker binary and then add the rules as needed.
+Depending on the mode you run it, it will ask you for every new connection attempt.
 
 ### 6. Update Claude In A Box
 
