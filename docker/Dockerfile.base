@@ -1,11 +1,17 @@
+# syntax=docker/dockerfile:1
+# Base image for claude-in-a-box - minimal foundation with dev tools
+# Contains: Node 20, ZSH/Powerline10k, git, gh, Playwright, Claude Code CLI
+# Does NOT contain: Java, SDKMAN, Quarkus, Flutter (those are in variant images)
 FROM node:20-trixie
 
 ARG TZ
-ARG CLAUDE_CODE_VERSION=latest
+ARG CLAUDE_CODE_VERSION=stable
 ARG USERNAME=node
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ="$TZ"
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
 
 # Use bash instead of sh
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
@@ -34,9 +40,15 @@ RUN <<EOF
     aggregate \
     jq \
     nano \
-    vim
+    vim \
+    locales \
+    shellcheck
   apt-get clean
   rm -rf /var/lib/apt/lists/*
+  # Set up locales
+  sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
+  dpkg-reconfigure --frontend=noninteractive locales
+  update-locale LANG=en_US.UTF-8 LANGUAGE=en_US.UTF-8 LC_ALL=en_US.UTF-8
 EOF
 
 # Ensure default node user has access to /usr/local/share
@@ -56,10 +68,12 @@ EOT
 WORKDIR /workspace
 
 ARG GIT_DELTA_VERSION=0.18.2
-RUN ARCH=$(dpkg --print-architecture) && \
-  wget "https://github.com/dandavison/delta/releases/download/${GIT_DELTA_VERSION}/git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
-  sudo dpkg -i "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
+RUN <<EOT
+   ARCH=$(dpkg --print-architecture)
+  wget "https://github.com/dandavison/delta/releases/download/${GIT_DELTA_VERSION}/git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb"
+  sudo dpkg -i "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb"
   rm "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb"
+EOT
 
 # Set up non-root user
 USER ${USERNAME}
@@ -88,9 +102,6 @@ RUN <<EOF \
   -x
 EOF
 
-# Install Claude
-RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
-
 
 # Copy and set up firewall script
 COPY init-firewall.sh /usr/local/bin/
@@ -100,8 +111,13 @@ RUN <<EOF
   echo "node ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/node-firewall
   chmod 0440 /etc/sudoers.d/node-firewall
 EOF
-USER ${USERNAME}
 
+USER ${USERNAME}
+# Install Claude
+RUN <<EOF
+  curl -fsSL https://claude.ai/install.sh | bash -s ${CLAUDE_CODE_VERSION}
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/${USERNAME}/.oh-my-zsh/custom/env.zsh
+EOF
 
 ## Customized parts below ##
 # Install Playwright MCP Server
@@ -111,50 +127,20 @@ RUN <<EOF
     npx -y playwright install-deps
 EOF
 
+
 USER ${USERNAME}
 RUN <<EOF
     npm install -g @playwright/test
     npx -y playwright install firefox
 EOF
 
-# Install dependencies for GraalVM native-image
-USER root
-RUN <<EOF
-    apt-get update
-    apt-get install -y --no-install-recommends zip curl wget
-    # https://www.graalvm.org/latest/getting-started/linux/#prerequisites-for-native-image-on-linux
-    apt-get install -y --no-install-recommends build-essential zlib1g-dev
-    apt-get clean
-    rm -rf /var/lib/apt/lists/*
-EOF
-
 USER ${USERNAME}
 # ZSH customizations and project specific initializations
 RUN <<EOF
-  echo "[[ -s /home/${USERNAME}/.gh_token ]] && export GH_TOKEN=\"$(cat /home/${USERNAME}/.gh_token)\"" >> /home/${USERNAME}/.oh-my-zsh/custom/vars.zsh
+  echo "[[ -s /home/${USERNAME}/.gh_token ]] && export GH_TOKEN=\"$(cat /home/${USERNAME}/.gh_token)\"" >> /home/${USERNAME}/.oh-my-zsh/custom/env.zsh
   echo '# The space at the end of the commands makes shell command completion work with an alias"' >> /home/${USERNAME}/.oh-my-zsh/custom/aliases.zsh
   echo 'alias claude-yolo="claude --dangerously-skip-permissions "' >> /home/${USERNAME}/.oh-my-zsh/custom/aliases.zsh
   echo '# Project specific configurations for claude-in-box' >> /home/${USERNAME}/.zshrc
   echo "[[ -x /home/${USERNAME}/.claude-in-a-box/init.sh ]] && /home/${USERNAME}/.claude-in-a-box/init.sh" >> /home/${USERNAME}/.zshrc
-EOF
-
-# Install SDKMAN and GraalVM, this needs to happen after the powerline10k setup to ensure zshrc changes are not overwritten.
-COPY --chmod=0755 sdkman.sh /home/${USERNAME}/.sdkman-install.sh
-RUN <<EOF
-    /home/${USERNAME}/.sdkman-install.sh
-    # Disable sdkman interactive prompts
-    sed -i 's/sdkman_auto_answer=false/sdkman_auto_answer=true/' /home/${USERNAME}/.sdkman/etc/config
-    # Cannot be used with 'set -u' enabled
-    set +u
-    source /home/${USERNAME}/.sdkman/bin/sdkman-init.sh
-    echo '#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!' >> /home/${USERNAME}/.zshrc
-    echo "[[ -s /home/${USERNAME}/.sdkman/bin/sdkman-init.sh ]] && source /home/${USERNAME}/.sdkman/bin/sdkman-init.sh" >>/home/${USERNAME}/.zshrc
-    sdk install java 24.0.2-graalce
-    sdk install java 21.0.8-tem
-    sdk install quarkus 3.29.0
-    sdk default java 24.0.2-graalce
-    set -u
-    # Re-enable sdkman interactive prompts
-    sed -i 's/sdkman_auto_answer=true/sdkman_auto_answer=false/' /home/${USERNAME}/.sdkman/etc/config
 EOF
 

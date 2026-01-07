@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1
+# Devops variant - includes Helm
+ARG VERSION=latest
+FROM claude-in-a-box:base-${VERSION}
+
+ARG USERNAME=node
+
+USER root
+RUN <<EOF
+  apt-get install -yqq --no-install-recommends curl gpg apt-transport-https --yes
+  curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+  echo "deb [signed-by=/usr/share/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+  apt-get update -qq
+  apt-get install -yqq helm
+  apt-get clean
+  rm -rf /var/lib/apt/lists/*
+EOF
+
+USER ${USERNAME}
