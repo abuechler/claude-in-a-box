@@ -1,3 +1,6 @@
 .idea
 docs/*.cast
 docs/*.mov
+.playwright-mcp
+.claude
+.DS_Store

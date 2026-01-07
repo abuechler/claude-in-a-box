@@ -1,0 +1,75 @@
+# syntax=docker/dockerfile:1
+# Flutter variant - requires linux/amd64 for Flutter SDK compatibility
+# On Apple Silicon, build with: docker build --platform=linux/amd64
+# Extends java_quarkus with: Flutter SDK (includes Java/SDKMAN/Quarkus from parent)
+ARG VERSION=latest
+FROM claude-in-a-box:java_quarkus-${VERSION}
+
+ARG USERNAME=node
+
+# Install Flutter SDK
+# https://docs.flutter.dev/get-started/install/linux/web
+# Note: Flutter only provides x64 Linux builds
+ARG FLUTTER_VERSION=3.29.3
+ENV FLUTTER_HOME=/home/${USERNAME}/flutter
+ENV PATH="${FLUTTER_HOME}/bin:${PATH}"
+
+USER root
+RUN <<EOF
+    apt-get update -qq
+    apt-get install -yqq --no-install-recommends xz-utils \
+      libglu1-mesa \
+      clang \
+      cmake \
+      ninja-build \
+      libgtk-3-dev \
+      chromium
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+EOF
+
+
+USER ${USERNAME}
+RUN <<EOF
+    cd /home/${USERNAME}
+    curl -fsSL -o flutter.tar.xz "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz"
+    tar -xf flutter.tar.xz
+    rm flutter.tar.xz
+    flutter precache --web
+    flutter config --no-analytics
+    dart --disable-analytics
+    # Set CHROME_EXECUTABLE for Flutter
+    echo "[[ -f /usr/bin/chromium ]] && export CHROME_EXECUTABLE=/usr/bin/chromium" >> /home/${USERNAME}/.oh-my-zsh/custom/vars.zsh
+EOF
+
+RUN <<EOF
+     # Disable sdkman interactive prompts
+    sed -i 's/sdkman_auto_answer=false/sdkman_auto_answer=true/' /home/${USERNAME}/.sdkman/etc/config
+    # Cannot be used with 'set -u' enabled
+    set +u
+    source /home/${USERNAME}/.sdkman/bin/sdkman-init.sh
+    sdk default java 24.0.2-graalce
+    set -u
+     # Re-enable sdkman interactive prompts
+    sed -i 's/sdkman_auto_answer=true/sdkman_auto_answer=false/' /home/${USERNAME}/.sdkman/etc/config
+    # Android SDK
+    # https://developer.android.com/tools/sdkmanager
+    curl -o commandline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-14742923_latest.zip
+    mkdir -p /home/${USERNAME}/Android/cmdline-tools/
+    unzip commandline-tools.zip -d /home/${USERNAME}/Android/cmdline-tools/
+    mv /home/${USERNAME}/Android/cmdline-tools/cmdline-tools /home/${USERNAME}/Android/cmdline-tools/latest
+    mkdir -p /home/${USERNAME}/Android/licenses
+    # These hash like string values are constant (per version?) and are required to accept the various Android SDK licenses. They can be found by accepting the licenses on a local machine and then inspecting the contents of the generated license files.
+    echo -n "24333f8a63b6825ea9c5514f83c2829b004d1fee" >> /home/${USERNAME}/Android/licenses/android-sdk-license
+    echo -n "601085b94cd77f0b54ff86406957099ebe79c4d6" >> /home/${USERNAME}/Android/licenses/android-googletv-license
+    echo -n "ceff83576aac4f7f37cb98fe189e9fb3c49d3b81" >> /home/${USERNAME}/Android/licenses/android-googlexr-license
+    echo -n "e9acab5b5fbb560a72cfaecce8946896ff6aab9d" >> /home/${USERNAME}/Android/licenses/mips-android-sysimage-license
+    echo -n "84831b9409646a918e30573bab4c9c91346d8abd" >> /home/${USERNAME}/Android/licenses/android-sdk-preview-license
+    echo -n "33b6a2b64607f11b759f320ef9dff4ae5c47d97a" >> /home/${USERNAME}/Android/licenses/google-gdk-license
+    echo -n "859f317696f67ef3d7f30a50a5560e7834b43903" >> /home/${USERNAME}/Android/licenses/android-sdk-arm-dbt-license
+
+    /home/${USERNAME}/Android/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.1.0" --sdk_root=/home/${USERNAME}/Android
+    ${FLUTTER_HOME}/bin/flutter config --android-sdk=/home/${USERNAME}/Android
+    echo "export PATH=\"${FLUTTER_HOME}/bin:\$PATH\"" >> /home/${USERNAME}/.oh-my-zsh/custom/vars.zsh
+    echo "export PATH=\"/home/${USERNAME}/Android/cmdline-tools/latest/bin:\$PATH\"" >> /home/${USERNAME}/.oh-my-zsh/custom/vars.zsh
+EOF

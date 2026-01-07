@@ -25,7 +25,7 @@
 # one for now.
 ##########################################################
 set -euo pipefail
-version="1.0.1"
+version="1.0.3"
 
 script_dir=$(dirname "$(realpath "$0")")
 
@@ -49,6 +49,10 @@ claude_in_a_box_global_settings="$HOME/.claude-in-a-box"
 gh_project_token_file="$claude_project_settings/.gh_token"
 
 docker_image="claude-in-a-box"
+# Image variant configuration
+default_variant="java_quarkus"
+image_variant=""
+indent_for_echos="   "
 
 # Safely parse a value from INI-style config file (no code execution)
 # Usage: value=$(parse_ini_value "file" "key")
@@ -91,22 +95,124 @@ parse_ini_value() {
   return 1
 }
 
-read_claude_in_a_box_settings() {
+# Global arrays for variant discovery (avoids subshell issues)
+declare -a discovered_variants_list=()
+declare -A variant_platforms=()
+
+# Discover available variants by scanning Dockerfile.* files
+# Populates discovered_variants_list and variant_platforms global arrays
+discover_variants() {
+  local docker_dir="$script_dir/docker"
+  local -A variants=()
+  variant_platforms=()
+
+  for dockerfile in "$docker_dir"/Dockerfile.*; do
+    [[ -f "$dockerfile" ]] || continue
+    local suffix="${$(basename "$dockerfile")#Dockerfile.}"
+
+    # Handle platform-specific dockerfiles (e.g., flutter.amd64)
+    if [[ "$suffix" == *.amd64 ]]; then
+      local variant="${suffix%.amd64}"
+      variant_platforms[$variant]="linux/amd64"
+      variants[$variant]=1
+    else
+      variants[$suffix]=1
+    fi
+  done
+
+  # Sorted unique keys from associative array
+  discovered_variants_list=("${(@ok)variants}")
+}
+
+prompt_for_variant() {
+  # Discover available variants (populates global discovered_variants_list)
+  discover_variants
+
+  local variant_count=${#discovered_variants_list[@]}
+
+  echo ""
+  echo "========================================"
+  echo "  Claude In A Box - Image Variant Selection"
+  echo "========================================"
+  echo ""
+  echo "Available variants:"
+  echo ""
+
+  local i=1
+  local default_index=1
+  for v in "${discovered_variants_list[@]}"; do
+    if [[ "$v" == "$default_variant" ]]; then
+      echo "  $i) $v (default)"
+      default_index=$i
+    else
+      echo "  $i) $v"
+    fi
+    ((i++))
+  done
+  echo ""
+
+  while true; do
+    printf "Select variant [1-%d] (default: %d): " "$variant_count" "$default_index"
+    read -r choice
+
+    # Handle empty input (default)
+    if [[ -z "$choice" ]]; then
+      image_variant="$default_variant"
+      break
+    fi
+
+    # Handle numeric input
+    if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= variant_count )); then
+      image_variant="${discovered_variants_list[$choice]}"
+      break
+    fi
+
+    # Handle variant name input
+    for v in "${discovered_variants_list[@]}"; do
+      if [[ "$choice" == "$v" ]]; then
+        image_variant="$v"
+        break 2
+      fi
+    done
+
+    echo "Invalid selection. Please enter 1-$variant_count or a variant name."
+  done
+
+  echo ""
+  echo "Selected variant: $image_variant"
+
+  # Save to config file
+  if grep -q "^image_variant=" "$project_directory/.claude_in_a_box" 2>/dev/null; then
+    # Update existing entry
+    sed -i.bak "s/^image_variant=.*/image_variant=\"$image_variant\"/" "$project_directory/.claude_in_a_box"
+    rm -f "$project_directory/.claude_in_a_box.bak"
+  else
+    # Append new entry
+    echo "image_variant=\"$image_variant\"" >> "$project_directory/.claude_in_a_box"
+  fi
+
+  echo "Saved variant selection to .claude_in_a_box"
+  echo ""
+}
+
+init_project_settings() {
   # We're assuming that claude-in-a-box should be started from the current directory, let's do some sanity checks.
   if [[ "$project_directory" == "$HOME" || "$project_directory" == "/" || ! -d "$project_directory/.git" ]]; then
     echo "❌ Refusing to run in \$HOME, root or any directory that is not a Git project."
     exit 1
   fi
 
+  echo "⚙️ Checking project settings..."
+
   # Create project settings directory if it doesn't exist
   if [[ -d "$claude_project_dot_dir" ]]; then
-    echo -e "\t✅ Found Claude project settings in '$claude_project_dot_dir'."
+    echo -e "${indent_for_echos}✅ Found them in '$claude_project_dot_dir'."
     # Add settings file on existing projects if missing
     if [[ ! -f "$claude_project_dot_dir/settings.json" ]]; then
       cp "$script_dir/init_config/settings.json" "$claude_project_dot_dir"
     fi
   else
-    echo -e "\t📁 Creating project settings directory..."
+    echo -e "${indent_for_echos}📁 Creating project settings directory..."
     mkdir -p "$claude_project_dot_dir"
     cp "$script_dir/init_config/settings.json" "$claude_project_dot_dir"
     # Generate a unique userID (64 hex chars) using only default tools
@@ -124,10 +230,10 @@ read_claude_in_a_box_settings() {
   # Determine which GitHub token to use
   if [[ -s "$gh_project_token_file" ]]; then
     gh_token_file="$gh_project_token_file"
-    echo -e "\t✅ Using project-specific GitHub token for project '$project_name'."
+    echo -e "${indent_for_echos}✅ Using project-specific GitHub token for project '$project_name'."
   else
-    echo -e "\tℹ️ No GitHub token found. To use gh CLI, create a fained grained token and save it to:"
-    echo -e "\t👉 $gh_project_token_file"
+    echo -e "${indent_for_echos}ℹ️ No GitHub token found. To use gh CLI, create a fine-grained token and save it to:"
+    echo -e "${indent_for_echos}${indent_for_echos}👉 $gh_project_token_file"
     # Create empty token file to prevent mount errors
     touch "$gh_project_token_file"
     chmod 600 "$gh_project_token_file"
@@ -135,23 +241,21 @@ read_claude_in_a_box_settings() {
   fi
 
   if [[ ! -d "$claude_in_a_box_global_settings" ]]; then
-    echo -e "\t📁 Creating user settings directory in $claude_in_a_box_global_settings"
+    echo -e "${indent_for_echos}📁 Creating user settings directory in $claude_in_a_box_global_settings"
     mkdir -p "$claude_in_a_box_global_settings"
   fi
 
   if [[ ! -f .mcp.json ]]; then
-    echo -e "\tℹ️ No .mcp.json file found in project directory. Creating one with Playwright settings..."
+    echo -e "${indent_for_echos}ℹ️ No .mcp.json file found in project directory. Creating one with Playwright settings..."
     cp "$script_dir/init_config/mcp.json" "$project_directory/.mcp.json"
-    echo -e "\t💡You might want to add the $project_directory/.mcp.json file to Git and commit it."
+    echo -e "${indent_for_echos}💡You might want to add the $project_directory/.mcp.json file to Git and commit it."
   fi
 
-  if [[ -f "$project_directory/.claude_in_a_box" ]]; then
-    echo -e "\t✅ Found .claude_in_a_box settings in project directory."
-  else
-    echo -e "\tℹ️ No .claude_in_a_box file found in project directory. Creating one..."
+  if [[ ! -f "$project_directory/.claude_in_a_box" ]]; then
+    echo -e "${indent_for_echos}ℹ️ No .claude_in_a_box file found in project directory. Creating one..."
     safe_project_name=$(echo "$project_name" | tr -cd 'A-Za-z0-9_-')
     echo "project_name=\"$safe_project_name\"" >"$project_directory/.claude_in_a_box"
-    echo -e "\t💡You might want to add the $project_directory/.claude_in_a_box file to Git and commit it."
+    echo -e "${indent_for_echos}💡You might want to add the $project_directory/.claude_in_a_box file to Git and commit it."
   fi
 
   # Parse config values safely (no code execution, unlike 'source')
@@ -163,13 +267,142 @@ read_claude_in_a_box_settings() {
       echo -e "\t⚠️  Project name sanitized: '$parsed_project_name' → '$project_name'"
     fi
   fi
-  # If parsing failed or empty, project_name keeps its default (directory basename)
+
+  # Validate and prompt for image_variant if not set
+  # Discover variants first to populate discovered_variants_list and variant_platforms
+  if ! image_variant=$(parse_ini_value "$project_directory/.claude_in_a_box" "image_variant"); then
+    image_variant=""
+  fi
+  discover_variants
+
+
+  if [[ -z "${image_variant:-}" ]]; then
+    echo -e "${indent_for_echos}ℹ️  No image variant configured."
+    prompt_for_variant
+  elif [[ ! " ${discovered_variants_list[*]} " =~ \ ${image_variant}\  ]]; then
+    echo -e "${indent_for_echos}⚠️  Invalid image_variant '$image_variant' in config."
+    echo -e "${indent_for_echos}Valid options: ${discovered_variants_list[*]}"
+    prompt_for_variant
+  else
+    echo -e "${indent_for_echos}✅ Using image variant: $image_variant"
+  fi
+
+  # Check Docker is available
+  echo "🐳 Checking Docker..."
+  if ! docker info &>/dev/null; then
+    echo -e "${indent_for_echos}❌ Docker is not installed or not running. Please install or start Docker."
+    exit 1
+  fi
+  echo -e "${indent_for_echos}✅ Docker is running."
+}
+
+build_docker_image() {
+  local image_type="$1"      # "base" or variant name
+  local platform="${2:-}"    # optional, auto-detected if not provided
+  local tag dockerfile platform_args=() platform_suffix="" base_version="$version"
+
+  # Only show header for variant builds (not recursive base builds)
+  if [[ "$image_type" != "base" ]]; then
+    echo "🐳 Checking if Docker images have been built..."
+  fi
+
+  # Auto-detect platform for variants requiring cross-platform emulation
+  if [[ -z "$platform" && "$image_type" != "base" ]]; then
+    local host_arch
+    host_arch="$(uname -m)"
+    local required_platform="${variant_platforms[$image_type]:-}"
+    if [[ -n "$required_platform" && ("$host_arch" == "arm64" || "$host_arch" == "aarch64") ]]; then
+      echo -e "${indent_for_echos}🍎 Apple Silicon detected - building $required_platform image (runs via Rosetta)"
+      platform="$required_platform"
+    fi
+  fi
+
+  # Handle platform
+  if [[ -n "$platform" ]]; then
+    platform_suffix="${platform#*/}"  # Extract "amd64" from "linux/amd64"
+    platform_args=(--platform "$platform")
+    base_version="$version-$platform_suffix"
+  fi
+
+  # Determine tag and dockerfile
+  if [[ "$image_type" == "base" ]]; then
+    tag="claude-in-a-box:base-${base_version}"
+    dockerfile="Dockerfile.base"
+  else
+    tag="$docker_image:${image_type}-${base_version}"
+    # Try platform-specific dockerfile first, fall back to generic
+    if [[ -n "$platform_suffix" && -f "$script_dir/docker/Dockerfile.${image_type}.${platform_suffix}" ]]; then
+      dockerfile="Dockerfile.${image_type}.${platform_suffix}"
+    else
+      dockerfile="Dockerfile.${image_type}"
+    fi
+  fi
+
+  # Check if image already exists
+  if docker image inspect "$tag" &>/dev/null; then
+    echo -e "${indent_for_echos}✅ Image '$tag' already exists."
+    return 0
+  fi
+
+  # Build dependencies: parse FROM line to find parent image
+  if [[ "$image_type" != "base" ]]; then
+    local dockerfile_path="$script_dir/docker/$dockerfile"
+    local from_line parent_variant
+    from_line=$(grep -E "^FROM " "$dockerfile_path" | head -1)
+
+    # Extract parent variant from FROM claude-in-a-box:<variant>-${VERSION}
+    # Pattern matches: claude-in-a-box:<variant>- where variant is lowercase with underscores
+    if [[ "$from_line" =~ 'claude-in-a-box:([a-z_]+)-' ]]; then
+      parent_variant="${match[1]}"
+      echo -e "${indent_for_echos}📦 Image depends on: $parent_variant"
+      if [[ "$parent_variant" == "base" ]]; then
+        build_docker_image "base" "$platform"
+      else
+        # Recursively build parent variant (which will build its dependencies)
+        build_docker_image "$parent_variant" "$platform"
+      fi
+    fi
+  fi
+
+  echo -e "${indent_for_echos}🔧 Building Docker image '$tag'..."
+  local current_timezone
+  current_timezone="$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')"
+
+  local build_args=(--no-cache "${platform_args[@]}" --build-arg TZ="$current_timezone")
+
+  # Variant images need VERSION arg to reference the correct base
+  if [[ "$image_type" != "base" ]]; then
+    build_args+=(--build-arg VERSION="$base_version")
+  fi
+
+  (
+    cd "$script_dir/docker"
+    docker build "${build_args[@]}" -t "$tag" -f "$dockerfile" .
+  )
 }
 
 run_claude_code() {
-  echo "🚀 Running Claude Code for project '$project_name'..."
-  read_claude_in_a_box_settings
+  local variant_tag
+  local platform_args=()
+  local image_variant
+  local tag_version="$version"
+  image_variant=$(parse_ini_value "$project_directory/.claude_in_a_box" "image_variant")
+
+  # Use matching platform for variants that require cross-platform emulation
+  local host_arch
+  host_arch="$(uname -m)"
+  local required_platform="${variant_platforms[$image_variant]:-}"
+  if [[ -n "$required_platform" && ("$host_arch" == "arm64" || "$host_arch" == "aarch64") ]]; then
+    platform_args=(--platform "$required_platform")
+    local platform_suffix="${required_platform#*/}"
+    tag_version="$version-$platform_suffix"
+  fi
+
+  variant_tag="$docker_image:${image_variant}-${tag_version}"
+
+  echo "🚀 Running Claude In A Box ($image_variant image) for project '$project_name'..."
   docker run -ti --rm --name "claude-in-a-box-$project_name" \
+    "${platform_args[@]}" \
     --entrypoint "/bin/zsh" \
     -v "$project_directory:/workspace" \
     -v "$gh_token_file:/home/node/.gh_token:ro" \
@@ -177,30 +410,12 @@ run_claude_code() {
     -v "$claude_project_dot_json:/home/node/.claude.json" \
     -v "$claude_project_shell_history_dir:/home/node/.shell_history" \
     -v "$claude_in_a_box_global_settings:/home/node/.claude-in-a-box:ro" \
-    "$docker_image":$version
+    "$variant_tag"
 }
 
-build_custom_docker_image() {
-  set +e
-  docker info &>/dev/null || {
-    echo "❌ Docker is not installed or not running. Please install or start Docker to use this script."
-    exit 1
-  }
-
-  if ! docker image inspect "$docker_image":$version &>/dev/null; then
-    set -e
-    echo -e "🔧  Building Docker image '$docker_image'..."
-    current_timezone="$(readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||')"
-    current_timezone="${current_timezone:-UTC}"
-    echo "🔍  Looking for Dockerfile in '$script_dir'..."
-    (
-      cd "$script_dir/docker"
-      # Pass the timezone as a build argument
-      docker build --no-cache --build-arg TZ="$current_timezone" -t "$docker_image":$version .
-    )
-  fi
-  set -e
-}
-
-build_custom_docker_image
+###########################################################
+# Main execution
+###########################################################
+init_project_settings
+build_docker_image "$(parse_ini_value "$project_directory/.claude_in_a_box" "image_variant")"
 run_claude_code
