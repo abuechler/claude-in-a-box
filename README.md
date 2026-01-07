@@ -7,11 +7,12 @@
 # Claude In A Box
 
 A custom Docker environment for running [Claude Code](https://github.com/anthropics/claude-code) with enhanced security,
-Java development tools (GraalVM), and Quarkus framework support.
+Java development tools (GraalVM), Quarkus framework, and optional Flutter SDK support.
 
 ## Features
 
 - **🤖 Claude Code CLI** - Official Anthropic AI coding assistant
+- **🎯 Image Variants** - Choose between `Java & Quarkus` (native arch) or `Flutter SDK` (amd64 via Rosetta on ARM)
 - **☕ GraalVM Support** - Multiple Java versions (21 LTS & 24 CE) with native-image compilation
 - **🚀 Quarkus Framework** - Pre-installed Quarkus 3.29.0 for supersonic subatomic Java
 - **🎨 ZSH with Powerline10k** - Beautiful and functional shell environment
@@ -66,7 +67,11 @@ clc
 
 The first time you run `clc`, it will:
 
-- Automatically build the Docker image (this may take several minutes)
+- **Prompt you to select an image variant:**
+  - `java_quarkus` - Native architecture, includes Java/GraalVM/Quarkus/Playwright
+  - `flutter` - Adds Flutter SDK, forces linux/amd64 (runs via Rosetta on ARM)
+- Save your selection to `.claude_in_a_box` in your project directory
+- Automatically build the Docker image(s) (this may take several minutes)
 - Create per-project settings in `~/.claude_project_settings/<project-name>/`
 - Launch a ZSH shell inside the Docker container with your project mounted
 - **Now you can run `claude-yolo` which is an alias for `claude --allow-dangerously-skip-permissions`**
@@ -77,6 +82,17 @@ The first time you run `clc`, it will:
 > permission prompts.
 
 ### 4. Configuration
+
+#### Image Variant
+
+The image variant is stored in your project's `.claude_in_a_box` file:
+
+```bash
+project_name="my-project"
+image_variant="java_quarkus"  # or "flutter"
+```
+
+To switch variants, edit this file or delete the `image_variant` line to be prompted again.
 
 #### Per-Project Settings
 

@@ -1,0 +1,8 @@
+# syntax=docker/dockerfile:1
+# Java/Quarkus variant - builds for native architecture
+# Includes: Node, dev tools, SDKMAN, GraalVM, Java 21, Quarkus, Playwright
+ARG VERSION=latest
+FROM claude-in-a-box-base:${VERSION}
+
+# This variant inherits all components from the base image.
+# No additional installation required.

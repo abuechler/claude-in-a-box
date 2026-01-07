@@ -25,7 +25,7 @@
 # one for now.
 ##########################################################
 set -euo pipefail
-version="1.0.1"
+version="1.0.2"
 
 script_dir=$(dirname "$(realpath "$0")")
 
@@ -49,6 +49,65 @@ claude_in_a_box_global_settings="$HOME/.claude-in-a-box"
 gh_project_token_file="$claude_project_settings/.gh_token"
 
 docker_image="claude-in-a-box"
+
+# Image variant configuration
+valid_variants=("java_quarkus" "flutter")
+image_variant=""
+
+prompt_for_variant() {
+  echo ""
+  echo "========================================"
+  echo "  Claude In A Box - Image Variant Selection"
+  echo "========================================"
+  echo ""
+  echo "Available variants:"
+  echo ""
+  echo "  1) java_quarkus (default)"
+  echo "     - Native architecture (optimal performance on your system)"
+  echo "     - Includes: Node, dev tools, SDKMAN, GraalVM, Java 21, Quarkus, Playwright"
+  echo "     - Recommended for: Java/Quarkus development"
+  echo ""
+  echo "  2) flutter"
+  echo "     - Forces linux/amd64 (runs via Rosetta on Apple Silicon)"
+  echo "     - Includes: Everything in java_quarkus + Flutter SDK"
+  echo "     - Recommended for: Flutter web/mobile development"
+  echo ""
+
+  while true; do
+    printf "Select variant [1-2] (default: 1): "
+    read -r choice
+
+    case "$choice" in
+      ""|"1"|"java_quarkus")
+        image_variant="java_quarkus"
+        break
+        ;;
+      "2"|"flutter")
+        image_variant="flutter"
+        break
+        ;;
+      *)
+        echo "Invalid selection. Please enter 1 or 2."
+        ;;
+    esac
+  done
+
+  echo ""
+  echo "Selected variant: $image_variant"
+
+  # Save to config file
+  if grep -q "^image_variant=" "$project_directory/.claude_in_a_box" 2>/dev/null; then
+    # Update existing entry
+    sed -i.bak "s/^image_variant=.*/image_variant=\"$image_variant\"/" "$project_directory/.claude_in_a_box"
+    rm -f "$project_directory/.claude_in_a_box.bak"
+  else
+    # Append new entry
+    echo "image_variant=\"$image_variant\"" >> "$project_directory/.claude_in_a_box"
+  fi
+
+  echo "Saved variant selection to .claude_in_a_box"
+  echo ""
+}
 
 read_claude_in_a_box_settings() {
   # We're assuming that claude-in-a-box should be started from the current directory, let's do some sanity checks.
@@ -112,11 +171,23 @@ read_claude_in_a_box_settings() {
     echo -e "\t💡You might want to add the $project_directory/.claude_in_a_box file to Git and commit it."
   fi
   source "$project_directory/.claude_in_a_box"
+
+  # Validate and prompt for image_variant if not set
+  if [[ -z "${image_variant:-}" ]]; then
+    echo -e "\tℹ️  No image variant configured."
+    prompt_for_variant
+  elif [[ ! " ${valid_variants[*]} " =~ " ${image_variant} " ]]; then
+    echo -e "\t⚠️  Invalid image_variant '$image_variant' in config."
+    echo -e "\tValid options: ${valid_variants[*]}"
+    prompt_for_variant
+  else
+    echo -e "\t✅ Using image variant: $image_variant"
+  fi
 }
 
 run_claude_code() {
-  echo "🚀 Running Claude Code for project '$project_name'..."
-  read_claude_in_a_box_settings
+  local variant_tag="$docker_image:${image_variant}-$version"
+  echo "🚀 Running Claude Code ($image_variant variant) for project '$project_name'..."
   docker run -ti --rm --name "claude-in-a-box-$project_name" \
     --entrypoint "/bin/zsh" \
     -v "$project_directory:/workspace" \
@@ -125,7 +196,60 @@ run_claude_code() {
     -v "$claude_project_dot_json:/home/node/.claude.json" \
     -v "$claude_project_shell_history_dir:/home/node/.shell_history" \
     -v "$claude_in_a_box_global_settings:/home/node/.claude-in-a-box:ro" \
-    "$docker_image":$version
+    "$variant_tag"
+}
+
+build_base_docker_image() {
+  local base_tag="claude-in-a-box-base:$version"
+
+  if ! docker image inspect "$base_tag" &>/dev/null; then
+    echo -e "🔧 Building base Docker image '$base_tag'..."
+    local current_timezone
+    current_timezone="$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')"
+
+    (
+      cd "$script_dir/docker"
+      docker build --no-cache \
+        --build-arg TZ="$current_timezone" \
+        -t "$base_tag" \
+        -f Dockerfile.base .
+    )
+  else
+    echo -e "\t✅ Base image '$base_tag' already exists."
+  fi
+}
+
+build_variant_docker_image() {
+  local variant="$1"
+  local variant_tag="$docker_image:${variant}-$version"
+  local base_tag="claude-in-a-box-base:$version"
+
+  # First ensure base image exists
+  build_base_docker_image
+
+  if ! docker image inspect "$variant_tag" &>/dev/null; then
+    echo -e "🔧 Building $variant variant Docker image '$variant_tag'..."
+    local current_timezone
+    current_timezone="$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')"
+
+    local host_arch
+    host_arch="$(uname -m)"
+
+    if [[ "$variant" == "flutter" && ("$host_arch" == "arm64" || "$host_arch" == "aarch64") ]]; then
+      echo -e "\t🍎 Apple Silicon detected - building linux/amd64 image (runs via Rosetta)"
+    fi
+
+    (
+      cd "$script_dir/docker"
+      docker build --no-cache \
+        --build-arg VERSION="$version" \
+        --build-arg TZ="$current_timezone" \
+        -t "$variant_tag" \
+        -f "Dockerfile.$variant" .
+    )
+  else
+    echo -e "\t✅ Variant image '$variant_tag' already exists."
+  fi
 }
 
 build_custom_docker_image() {
@@ -134,20 +258,18 @@ build_custom_docker_image() {
     echo "❌ Docker is not installed or not running. Please install or start Docker to use this script."
     exit 1
   }
-
-  if ! docker image inspect "$docker_image":$version &>/dev/null; then
-    set -e
-    echo -e "🔧  Building Docker image '$docker_image'..."
-    current_timezone="$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')"
-    echo "🔍  Looking for Dockerfile in '$script_dir'..."
-    (
-      cd "$script_dir/docker"
-      # Pass the timezone as a build argument
-      docker build --no-cache --build-arg TZ="$current_timezone" -t "$docker_image":$version .
-    )
-  fi
   set -e
+
+  echo "🔍 Looking for Dockerfiles in '$script_dir/docker'..."
+  build_variant_docker_image "$image_variant"
 }
 
+# Main execution - order matters!
+# 1. First read settings (which may prompt for variant selection)
+read_claude_in_a_box_settings
+
+# 2. Then build the appropriate image(s)
 build_custom_docker_image
+
+# 3. Finally run the container
 run_claude_code
