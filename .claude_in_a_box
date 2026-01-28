@@ -1,3 +1,2 @@
 project_name="claude-in-a-box"
-clc_version="1.0.1"
 image_variant="java_quarkus"
