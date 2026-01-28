@@ -202,8 +202,10 @@ run_claude_code() {
 build_base_docker_image() {
   local base_tag="claude-in-a-box-base:$version"
 
-  if ! docker image inspect "$base_tag" &>/dev/null; then
-    echo -e "🔧 Building base Docker image '$base_tag'..."
+  if docker image inspect "$base_tag" &>/dev/null; then
+    echo -e "\t✅ Base image '$base_tag' already exists."
+  else
+    echo -e "\t🔧 Building base Docker image '$base_tag'..."
     local current_timezone
     current_timezone="$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')"
 
@@ -214,8 +216,6 @@ build_base_docker_image() {
         -t "$base_tag" \
         -f Dockerfile.base .
     )
-  else
-    echo -e "\t✅ Base image '$base_tag' already exists."
   fi
 }
 
@@ -227,8 +227,10 @@ build_variant_docker_image() {
   # First ensure base image exists
   build_base_docker_image
 
-  if ! docker image inspect "$variant_tag" &>/dev/null; then
-    echo -e "🔧 Building $variant variant Docker image '$variant_tag'..."
+  if docker image inspect "$variant_tag" &>/dev/null; then
+    echo -e "\t✅ Variant image '$variant_tag' already exists."
+  else
+    echo -e "\t🔧 Building $variant variant Docker image '$variant_tag'..."
     local current_timezone
     current_timezone="$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')"
 
@@ -247,10 +249,9 @@ build_variant_docker_image() {
         -t "$variant_tag" \
         -f "Dockerfile.$variant" .
     )
-  else
-    echo -e "\t✅ Variant image '$variant_tag' already exists."
   fi
 }
+
 
 build_custom_docker_image() {
   set +e
