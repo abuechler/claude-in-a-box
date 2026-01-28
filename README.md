@@ -100,7 +100,10 @@ Each project gets its own settings directory at `~/.claude_project_settings/<pro
 
 - `claude/` - Claude-specific configuration and history
 - `claude.json` - Claude settings file
+- `shell_history/` - Persistent ZSH history across container sessions
 - `.gh_token` - GitHub token for this project (optional)
+- `.github-app-key.pem` - GitHub App private key (optional, for GitHub App auth)
+- `github-app-token.sh` - Script to generate GitHub App tokens (optional)
 
 #### Global Settings
 
@@ -119,6 +122,23 @@ To use the `gh` CLI tool, create a GitHub fine-grained token and save it to:
 ```
 
 The token will be automatically loaded when you start the container.
+
+#### GitHub App Authentication (Alternative)
+
+For more granular permissions or organization-level access, you can use GitHub App authentication instead of a personal token:
+
+1. Create a GitHub App in your organization/account settings
+2. Generate and download a private key for the App
+3. Save the private key to:
+   ```zsh
+   ~/.claude_project_settings/<project-name>/.github-app-key.pem
+   ```
+4. Create a token generation script at:
+   ```zsh
+   ~/.claude_project_settings/<project-name>/github-app-token.sh
+   ```
+
+Both files are mounted read-only into the container at `/home/node/`.
 
 #### Setting Up Git Credentials
 
