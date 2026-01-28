@@ -6,8 +6,8 @@
 
 # Claude In A Box
 
-A custom Docker environment for running [Claude Code](https://github.com/anthropics/claude-code) with enhanced security,
-Java development tools (GraalVM), Quarkus framework, and optional Flutter SDK support.
+A custom Docker environment for running [Claude Code](https://github.com/anthropics/claude-code) with enhanced security
+and specialized development tooling via image variants.
 
 ## How It Works
 
@@ -18,17 +18,19 @@ Java development tools (GraalVM), Quarkus framework, and optional Flutter SDK su
 
 ## Features
 
+**All variants include:**
 - **🤖 Claude Code CLI** - Official Anthropic AI coding assistant
-- **☕ Java Development Stack** - GraalVM with multiple Java versions (21/24/25) and Quarkus 3.29.0
-- **🎯 Image Variants** - `java_quarkus` (native) or `flutter`
 - **🎨 ZSH with Powerline10k** - Beautiful and functional shell environment
-- **📦 Development Tools** - Includes git, gh CLI, fzf, vim, nano, and more
-- **🔧 SDKMAN Integration** - Manage multiple SDK versions easily
-- **🎭 Playwright Testing** - E2E testing with Firefox; enables Flutter UI testing without mobile simulators
+- **📦 Development Tools** - git, gh CLI, fzf, vim, nano, jq, and more
+- **🎭 Playwright Testing** - E2E testing with Firefox
 - **🔒 Enhanced Security** - Network firewall restricting outbound access to approved domains only
 - **📊 Git Delta** - Syntax-highlighted git diffs for better code review
 - **🗂️ Per-Project Isolation** - Separate Claude settings and GitHub tokens per project
-- **💾 Command History** - Persistent bash/zsh history across sessions
+- **💾 Command History** - Persistent ZSH history across sessions
+
+**Image variants:**
+- **☕ `java_quarkus`** - Adds SDKMAN, GraalVM (Java 21/24/25), and Quarkus 3.29.0
+- **🦋 `flutter`** - Adds Flutter SDK (forces linux/amd64 on ARM for compatibility)
 
 ## Prerequisites
 
@@ -74,8 +76,8 @@ clc
 The first time you run `clc`, it will:
 
 - **Prompt you to select an image variant:**
-  - `java_quarkus` - Native architecture, includes Java/GraalVM/Quarkus/Playwright
-  - `flutter` - Adds Flutter SDK, forces linux/amd64 (runs via Rosetta on ARM)
+  - `java_quarkus` - Native architecture, adds SDKMAN/GraalVM/Java/Quarkus to base
+  - `flutter` - Adds Flutter SDK to base, forces linux/amd64 (runs via Rosetta on ARM)
 - Save your selection to `.claude_in_a_box` in your project directory
 - Automatically build the Docker image(s) (this may take several minutes)
 - Create per-project settings in `~/.claude_project_settings/<project-name>/`

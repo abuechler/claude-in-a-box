@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1
-# Base image for claude-in-a-box - builds for native architecture
+# Base image for claude-in-a-box - minimal foundation with dev tools
+# Contains: Node 20, ZSH/Powerline10k, git, gh, Playwright, Claude Code CLI
+# Does NOT contain: Java, SDKMAN, Quarkus, Flutter (those are in variant images)
 FROM node:20-trixie
 
 ARG TZ
@@ -119,17 +121,6 @@ RUN <<EOF
     npx -y playwright install firefox
 EOF
 
-# Install dependencies for GraalVM native-image
-USER root
-RUN <<EOF
-    apt-get update
-    apt-get install -y --no-install-recommends zip curl wget
-    # https://www.graalvm.org/latest/getting-started/linux/#prerequisites-for-native-image-on-linux
-    apt-get install -y --no-install-recommends build-essential zlib1g-dev
-    apt-get clean
-    rm -rf /var/lib/apt/lists/*
-EOF
-
 USER ${USERNAME}
 # ZSH customizations and project specific initializations
 RUN <<EOF
@@ -140,23 +131,3 @@ RUN <<EOF
   echo "[[ -x /home/${USERNAME}/.claude-in-a-box/init.sh ]] && /home/${USERNAME}/.claude-in-a-box/init.sh" >> /home/${USERNAME}/.zshrc
 EOF
 
-# Install SDKMAN and GraalVM, this needs to happen after the powerline10k setup to ensure zshrc changes are not overwritten.
-COPY --chmod=0755 sdkman.sh /home/${USERNAME}/.sdkman-install.sh
-RUN <<EOF
-    /home/${USERNAME}/.sdkman-install.sh
-    # Disable sdkman interactive prompts
-    sed -i 's/sdkman_auto_answer=false/sdkman_auto_answer=true/' /home/${USERNAME}/.sdkman/etc/config
-    # Cannot be used with 'set -u' enabled
-    set +u
-    source /home/${USERNAME}/.sdkman/bin/sdkman-init.sh
-    echo '#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!' >> /home/${USERNAME}/.zshrc
-    echo "[[ -s /home/${USERNAME}/.sdkman/bin/sdkman-init.sh ]] && source /home/${USERNAME}/.sdkman/bin/sdkman-init.sh" >>/home/${USERNAME}/.zshrc
-    sdk install java 21.0.8-tem
-    sdk install java 24.0.2-graalce
-    sdk install java 25.0.2-graalce
-    sdk install quarkus 3.29.0
-    sdk default java 24.0.2-graalce
-    set -u
-    # Re-enable sdkman interactive prompts
-    sed -i 's/sdkman_auto_answer=true/sdkman_auto_answer=false/' /home/${USERNAME}/.sdkman/etc/config
-EOF
