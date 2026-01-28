@@ -151,8 +151,9 @@ RUN <<EOF
     source /home/${USERNAME}/.sdkman/bin/sdkman-init.sh
     echo '#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!' >> /home/${USERNAME}/.zshrc
     echo "[[ -s /home/${USERNAME}/.sdkman/bin/sdkman-init.sh ]] && source /home/${USERNAME}/.sdkman/bin/sdkman-init.sh" >>/home/${USERNAME}/.zshrc
-    sdk install java 24.0.2-graalce
     sdk install java 21.0.8-tem
+    sdk install java 24.0.2-graalce
+    sdk install java 25.0.2-graalce
     sdk install quarkus 3.29.0
     sdk default java 24.0.2-graalce
     set -u
