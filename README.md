@@ -9,6 +9,13 @@
 A custom Docker environment for running [Claude Code](https://github.com/anthropics/claude-code) with enhanced security,
 Java development tools (GraalVM), Quarkus framework, and optional Flutter SDK support.
 
+## How It Works
+
+<div align="center">
+  <img src="docs/claude-in-a-box-explained.png" alt="Claude In A Box Security Model" width="600" />
+  <p><em>Your IDE retains full system access while Claude Code is sandboxed to your project only</em></p>
+</div>
+
 ## Features
 
 - **🤖 Claude Code CLI** - Official Anthropic AI coding assistant
