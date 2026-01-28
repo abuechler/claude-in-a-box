@@ -50,6 +50,47 @@ gh_project_token_file="$claude_project_settings/.gh_token"
 
 docker_image="claude-in-a-box"
 
+# Safely parse a value from INI-style config file (no code execution)
+# Usage: value=$(parse_ini_value "file" "key")
+# Returns: 0 if key found, 1 if not found
+parse_ini_value() {
+  local file="$1" key="$2"
+  local line k v
+  [[ ! -f "$file" ]] && return 1
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    # Skip comments and empty lines
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ "$line" =~ ^[[:space:]]*\; ]] && continue
+    [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+    # Skip lines without =
+    [[ "$line" != *"="* ]] && continue
+    # Split on first =
+    k="${line%%=*}"
+    v="${line#*=}"
+    # Trim whitespace from key
+    k="${k#"${k%%[![:space:]]*}"}"
+    k="${k%"${k##*[![:space:]]}"}"
+    # Check if key matches
+    if [[ "$k" == "$key" ]]; then
+      # Trim whitespace from value
+      v="${v#"${v%%[![:space:]]*}"}"
+      v="${v%"${v##*[![:space:]]}"}"
+      # Strip surrounding double quotes
+      if [[ "$v" == \"*\" ]]; then
+        v="${v#\"}"
+        v="${v%\"}"
+      # Strip surrounding single quotes
+      elif [[ "$v" == \'*\' ]]; then
+        v="${v#\'}"
+        v="${v%\'}"
+      fi
+      echo "$v"
+      return 0
+    fi
+  done < "$file"
+  return 1
+}
+
 read_claude_in_a_box_settings() {
   # We're assuming that claude-in-a-box should be started from the current directory, let's do some sanity checks.
   if [[ "$project_directory" == "$HOME" || "$project_directory" == "/" || ! -d "$project_directory/.git" ]]; then
@@ -111,7 +152,17 @@ read_claude_in_a_box_settings() {
     echo "project_name=\"$safe_project_name\"" >"$project_directory/.claude_in_a_box"
     echo -e "\t💡You might want to add the $project_directory/.claude_in_a_box file to Git and commit it."
   fi
-  source "$project_directory/.claude_in_a_box"
+
+  # Parse config values safely (no code execution, unlike 'source')
+  local parsed_project_name
+  if parsed_project_name=$(parse_ini_value "$project_directory/.claude_in_a_box" "project_name"); then
+    # Sanitize: allow only alphanumeric, underscore, and hyphen
+    project_name=$(echo "$parsed_project_name" | tr -cd 'A-Za-z0-9_-')
+    if [[ "$parsed_project_name" != "$project_name" ]]; then
+      echo -e "\t⚠️  Project name sanitized: '$parsed_project_name' → '$project_name'"
+    fi
+  fi
+  # If parsing failed or empty, project_name keeps its default (directory basename)
 }
 
 run_claude_code() {
