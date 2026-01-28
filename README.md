@@ -19,13 +19,12 @@ Java development tools (GraalVM), Quarkus framework, and optional Flutter SDK su
 ## Features
 
 - **🤖 Claude Code CLI** - Official Anthropic AI coding assistant
-- **🎯 Image Variants** - Choose between `Java & Quarkus` (native arch) or `Flutter SDK` (amd64 via Rosetta on ARM)
-- **☕ GraalVM Support** - Multiple Java versions (21 LTS & 24 CE) with native-image compilation
-- **🚀 Quarkus Framework** - Pre-installed Quarkus 3.29.0 for supersonic subatomic Java
+- **☕ Java Development Stack** - GraalVM with multiple Java versions (21/24/25) and Quarkus 3.29.0
+- **🎯 Image Variants** - `java_quarkus` (native) or `flutter`
 - **🎨 ZSH with Powerline10k** - Beautiful and functional shell environment
 - **📦 Development Tools** - Includes git, gh CLI, fzf, vim, nano, and more
 - **🔧 SDKMAN Integration** - Manage multiple SDK versions easily
-- **🎭 Playwright Testing** - Pre-configured Playwright with Firefox for E2E testing
+- **🎭 Playwright Testing** - E2E testing with Firefox; enables Flutter UI testing without mobile simulators
 - **🔒 Enhanced Security** - Network firewall restricting outbound access to approved domains only
 - **📊 Git Delta** - Syntax-highlighted git diffs for better code review
 - **🗂️ Per-Project Isolation** - Separate Claude settings and GitHub tokens per project
