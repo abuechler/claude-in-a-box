@@ -30,8 +30,8 @@ version="1.0.1"
 script_dir=$(dirname "$(realpath "$0")")
 
 project_directory="$(pwd)"
-# Derive the project name from the directory name, we'll sanitize it later in read_claude_in_a_box_settings
-project_name="$(basename "$project_directory")"
+# Derive the project name from the directory name, sanitized to safe characters
+project_name="$(basename "$project_directory" | tr -cd 'A-Za-z0-9_-')"
 # Contains files and settings for all projects
 claude_project_settings_root="$HOME/.claude_project_settings"
 # Project specific settings directory => All the stuff we want to persist per project across container runs
@@ -102,7 +102,7 @@ read_claude_in_a_box_settings() {
   if [[ -d "$claude_project_dot_dir" ]]; then
     echo -e "\t✅ Found Claude project settings in '$claude_project_dot_dir'."
     # Add settings file on existing projects if missing
-    if [[ ! -f "$claude_project_dot_json/settings.json" ]]; then
+    if [[ ! -f "$claude_project_dot_dir/settings.json" ]]; then
       cp "$script_dir/init_config/settings.json" "$claude_project_dot_dir"
     fi
   else
@@ -130,6 +130,7 @@ read_claude_in_a_box_settings() {
     echo -e "\t👉 $gh_project_token_file"
     # Create empty token file to prevent mount errors
     touch "$gh_project_token_file"
+    chmod 600 "$gh_project_token_file"
     gh_token_file="$gh_project_token_file"
   fi
 
@@ -189,7 +190,8 @@ build_custom_docker_image() {
   if ! docker image inspect "$docker_image":$version &>/dev/null; then
     set -e
     echo -e "🔧  Building Docker image '$docker_image'..."
-    current_timezone="$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')"
+    current_timezone="$(readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||')"
+    current_timezone="${current_timezone:-UTC}"
     echo "🔍  Looking for Dockerfile in '$script_dir'..."
     (
       cd "$script_dir/docker"
