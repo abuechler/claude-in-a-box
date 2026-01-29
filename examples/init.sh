@@ -35,7 +35,7 @@ fi
 
 if [[ -n "${token}" ]]; then
   # 👇 Adopt the username after copying the script!
-  echo "https://abuechler:${token}@github.com" >~/.git-credentials
+  echo "https://your_github_username:${token}@github.com" >~/.git-credentials
   chmod 600 ~/.git-credentials
   git config --global credential.helper store
   echo -e "${indent}✅ Git credentials configured successfully"

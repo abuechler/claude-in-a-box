@@ -13,6 +13,7 @@ and specialized development tooling via image variants.
 ## Features
 
 **All variants include:**
+
 - **🤖 Claude Code CLI** - Official Anthropic AI coding assistant
 - **🎨 ZSH with Powerline10k** - Beautiful and functional shell environment
 - **📦 Development Tools** - git, gh CLI, fzf, vim, nano, jq, and more
@@ -23,6 +24,7 @@ and specialized development tooling via image variants.
 - **💾 Command History** - Persistent ZSH history across sessions
 
 **Image variants:**
+
 - **☕ `java_quarkus`** - Adds SDKMAN, GraalVM (Java 21/24/25), and Quarkus 3.29.0
 - **🦋 `flutter`** - Adds Flutter SDK (forces linux/amd64 on ARM for compatibility)
 
@@ -31,7 +33,13 @@ and specialized development tooling via image variants.
 Before using this Docker environment, ensure you have the following ready:
 
 - **Docker** - [Install Docker](https://docs.docker.com/get-docker/) for your platform
-- **[A fine-grained GitHub Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token)** - Optional, for using the `gh` CLI tool
+- **[A fine-grained GitHub Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token)** – optional, for using the `gh` CLI tool
+
+## How It Looks
+
+<div align="center">
+  <img src="docs/claude-in-a-box.gif" alt="Claude In A Box Demo" width="800" />
+</div>
 
 ## Installation and Usage
 
@@ -70,8 +78,8 @@ clc
 The first time you run `clc`, it will:
 
 - **Prompt you to select an image variant:**
-  - `java_quarkus` - Native architecture, adds SDKMAN/GraalVM/Java/Quarkus to base
-  - `flutter` - Adds Flutter SDK to base, forces linux/amd64 (runs via Rosetta on ARM)
+    - `java_quarkus` - Native architecture, adds SDKMAN/GraalVM/Java/Quarkus to base
+    - `flutter` - Adds Flutter SDK to base, forces linux/amd64 (runs via Rosetta on ARM)
 - Save your selection to `.claude_in_a_box` in your project directory
 - Automatically build the Docker image(s) (this may take several minutes)
 - Create per-project settings in `~/.claude_project_settings/<project-name>/`
@@ -127,7 +135,8 @@ The token will be automatically loaded when you start the container.
 
 #### GitHub App Authentication (Alternative)
 
-For more granular permissions or organization-level access, you can use GitHub App authentication instead of a personal token:
+For more granular permissions or organization-level access, you can use GitHub App authentication instead of a personal
+token:
 
 1. Create a GitHub App in your organization/account settings
 2. Generate and download a private key for the App
