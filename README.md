@@ -1,9 +1,3 @@
-<div align="center">
-  <img src="https://raw.githubusercontent.com/abuechler/claude-in-a-box/refs/heads/main/docs/claudeinabox-logo.svg" alt="Claude In A Box Logo" width="350" />
-</div>
-
-<br />
-
 # Claude In A Box
 
 A custom Docker environment for running [Claude Code](https://github.com/anthropics/claude-code) with enhanced security
