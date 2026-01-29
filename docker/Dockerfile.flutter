@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
-# Flutter variant - forces linux/amd64 for Flutter SDK compatibility
-# On Apple Silicon, this runs via Rosetta emulation
+# Flutter variant - requires linux/amd64 for Flutter SDK compatibility
+# On Apple Silicon, build with: docker build --platform=linux/amd64
 # Extends base with: Flutter SDK (does NOT include Java/SDKMAN/Quarkus)
 ARG VERSION=latest
-FROM --platform=linux/amd64 claude-in-a-box-base:${VERSION}
+FROM claude-in-a-box-base:${VERSION}
 
 ARG USERNAME=node
 
