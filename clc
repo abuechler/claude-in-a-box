@@ -51,48 +51,91 @@ gh_project_token_file="$claude_project_settings/.gh_token"
 docker_image="claude-in-a-box"
 
 # Image variant configuration
-valid_variants=("java_quarkus" "flutter")
+default_variant="java_quarkus"
 image_variant=""
 indent_for_echos="   "
 
+# Global arrays for variant discovery (avoids subshell issues)
+declare -a discovered_variants_list=()
+declare -A variant_platforms=()
+
+# Discover available variants by scanning Dockerfile.* files
+# Populates discovered_variants_list and variant_platforms global arrays
+discover_variants() {
+  local docker_dir="$script_dir/docker"
+  discovered_variants_list=()
+  variant_platforms=()
+
+  for dockerfile in "$docker_dir"/Dockerfile.*; do
+    [[ -f "$dockerfile" ]] || continue
+    local suffix="${dockerfile#$docker_dir/Dockerfile.}"
+
+    # Check for platform suffix (e.g., .amd64)
+    if [[ "$suffix" == *.amd64 ]]; then
+      local variant_name="${suffix%.amd64}"
+      variant_platforms[$variant_name]="linux/amd64"
+      discovered_variants_list+=("$variant_name")
+    else
+      discovered_variants_list+=("$suffix")
+    fi
+  done
+
+  # Sort alphabetically in place
+  discovered_variants_list=($(printf '%s\n' "${discovered_variants_list[@]}" | sort))
+}
+
 prompt_for_variant() {
+  # Discover available variants (populates global discovered_variants_list)
+  discover_variants
+
+  local variant_count=${#discovered_variants_list[@]}
+
   echo ""
   echo "========================================"
   echo "  Claude In A Box - Image Variant Selection"
   echo "========================================"
   echo ""
-  echo "All variants include: Node 20, ZSH/Powerline10k, git, gh, Playwright, Claude Code CLI"
-  echo ""
   echo "Available variants:"
   echo ""
-  echo "  1) java_quarkus (default)"
-  echo "     - Native architecture (optimal performance on your system)"
-  echo "     - Adds: SDKMAN, GraalVM, Java 21/24/25, Quarkus 3.29.0"
-  echo "     - Recommended for: Java/Quarkus development"
-  echo ""
-  echo "  2) flutter"
-  echo "     - Forces linux/amd64 (runs via Rosetta on Apple Silicon)"
-  echo "     - Adds: Flutter SDK"
-  echo "     - Recommended for: Flutter web/mobile development"
+
+  local i=1
+  local default_index=1
+  for v in "${discovered_variants_list[@]}"; do
+    if [[ "$v" == "$default_variant" ]]; then
+      echo "  $i) $v (default)"
+      default_index=$i
+    else
+      echo "  $i) $v"
+    fi
+    ((i++))
+  done
   echo ""
 
   while true; do
-    printf "Select variant [1-2] (default: 1): "
+    printf "Select variant [1-%d] (default: %d): " "$variant_count" "$default_index"
     read -r choice
 
-    case "$choice" in
-      ""|"1"|"java_quarkus")
-        image_variant="java_quarkus"
-        break
-        ;;
-      "2"|"flutter")
-        image_variant="flutter"
-        break
-        ;;
-      *)
-        echo "Invalid selection. Please enter 1 or 2."
-        ;;
-    esac
+    # Handle empty input (default)
+    if [[ -z "$choice" ]]; then
+      image_variant="$default_variant"
+      break
+    fi
+
+    # Handle numeric input
+    if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= variant_count )); then
+      image_variant="${discovered_variants_list[$choice]}"
+      break
+    fi
+
+    # Handle variant name input
+    for v in "${discovered_variants_list[@]}"; do
+      if [[ "$choice" == "$v" ]]; then
+        image_variant="$v"
+        break 2
+      fi
+    done
+
+    echo "Invalid selection. Please enter 1-$variant_count or a variant name."
   done
 
   echo ""
@@ -176,12 +219,15 @@ read_claude_in_a_box_settings() {
   source "$project_directory/.claude_in_a_box"
 
   # Validate and prompt for image_variant if not set
+  # Discover variants first to populate discovered_variants_list and variant_platforms
+  discover_variants
+
   if [[ -z "${image_variant:-}" ]]; then
     echo -e "${indent_for_echos}ℹ️  No image variant configured."
     prompt_for_variant
-  elif [[ ! " ${valid_variants[*]} " =~ " ${image_variant} " ]]; then
+  elif [[ ! " ${discovered_variants_list[*]} " =~ " ${image_variant} " ]]; then
     echo -e "${indent_for_echos}⚠️  Invalid image_variant '$image_variant' in config."
-    echo -e "${indent_for_echos}Valid options: ${valid_variants[*]}"
+    echo -e "${indent_for_echos}Valid options: ${discovered_variants_list[*]}"
     prompt_for_variant
   else
     echo -e "${indent_for_echos}✅ Using image variant: $image_variant"
@@ -189,14 +235,22 @@ read_claude_in_a_box_settings() {
 }
 
 run_claude_code() {
-  local variant_tag="$docker_image:${image_variant}-$version"
+  local variant_tag
   local platform_args=()
+
+  # Handle base variant's different tag pattern
+  if [[ "$image_variant" == "base" ]]; then
+    variant_tag="claude-in-a-box-base:$version"
+  else
+    variant_tag="$docker_image:${image_variant}-$version"
+  fi
 
   # Use matching platform for variants that require cross-platform emulation
   local host_arch
   host_arch="$(uname -m)"
-  if [[ "$image_variant" == "flutter" && ("$host_arch" == "arm64" || "$host_arch" == "aarch64") ]]; then
-    platform_args=(--platform "linux/amd64")
+  local required_platform="${variant_platforms[$image_variant]:-}"
+  if [[ -n "$required_platform" && ("$host_arch" == "arm64" || "$host_arch" == "aarch64") ]]; then
+    platform_args=(--platform "$required_platform")
   fi
 
   echo "🚀 Running Claude In A Box ($image_variant image) for project '$project_name'..."
@@ -244,10 +298,17 @@ build_base_docker_image() {
 
 build_variant_docker_image() {
   local variant="$1"
-  local variant_tag="$docker_image:${variant}-$version"
+  local variant_tag
   local base_version="$version"
   local platform=""
   local platform_args=()
+
+  # Handle base variant's different tag pattern
+  if [[ "$variant" == "base" ]]; then
+    variant_tag="claude-in-a-box-base:$version"
+  else
+    variant_tag="$docker_image:${variant}-$version"
+  fi
 
   # Check if variant image already exists first - skip all building if so
   if docker image inspect "$variant_tag" &>/dev/null; then
@@ -258,12 +319,20 @@ build_variant_docker_image() {
   # Determine if cross-platform build is needed
   local host_arch
   host_arch="$(uname -m)"
+  local required_platform="${variant_platforms[$variant]:-}"
 
-  if [[ "$variant" == "flutter" && ("$host_arch" == "arm64" || "$host_arch" == "aarch64") ]]; then
-    echo -e "${indent_for_echos}🍎 Apple Silicon detected - building linux/amd64 image (runs via Rosetta)"
-    platform="linux/amd64"
+  if [[ -n "$required_platform" && ("$host_arch" == "arm64" || "$host_arch" == "aarch64") ]]; then
+    local platform_suffix="${required_platform#*/}"  # Extract "amd64" from "linux/amd64"
+    echo -e "${indent_for_echos}🍎 Apple Silicon detected - building $required_platform image (runs via Rosetta)"
+    platform="$required_platform"
     platform_args=(--platform "$platform")
-    base_version="$version-amd64"
+    base_version="$version-$platform_suffix"
+  fi
+
+  # For base variant, just build the base image directly
+  if [[ "$variant" == "base" ]]; then
+    build_base_docker_image "$platform"
+    return 0
   fi
 
   # Ensure base image exists (with correct platform)
@@ -273,6 +342,13 @@ build_variant_docker_image() {
   local current_timezone
   current_timezone="$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')"
 
+  # Determine Dockerfile name (may have platform suffix)
+  local dockerfile_name="Dockerfile.$variant"
+  if [[ -n "$required_platform" ]]; then
+    local platform_suffix="${required_platform#*/}"
+    dockerfile_name="Dockerfile.$variant.$platform_suffix"
+  fi
+
   (
     cd "$script_dir/docker"
     docker build --no-cache \
@@ -280,7 +356,7 @@ build_variant_docker_image() {
       --build-arg VERSION="$base_version" \
       --build-arg TZ="$current_timezone" \
       -t "$variant_tag" \
-      -f "Dockerfile.$variant" .
+      -f "$dockerfile_name" .
   )
 }
 
