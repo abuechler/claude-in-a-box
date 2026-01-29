@@ -189,8 +189,18 @@ read_claude_in_a_box_settings() {
 
 run_claude_code() {
   local variant_tag="$docker_image:${image_variant}-$version"
+  local platform_args=()
+
+  # Use matching platform for variants that require cross-platform emulation
+  local host_arch
+  host_arch="$(uname -m)"
+  if [[ "$image_variant" == "flutter" && ("$host_arch" == "arm64" || "$host_arch" == "aarch64") ]]; then
+    platform_args=(--platform "linux/amd64")
+  fi
+
   echo "🚀 Running Claude Code ($image_variant variant) for project '$project_name'..."
   docker run -ti --rm --name "claude-in-a-box-$project_name" \
+    "${platform_args[@]}" \
     --entrypoint "/bin/zsh" \
     -v "$project_directory:/workspace" \
     -v "$gh_token_file:/home/node/.gh_token:ro" \
@@ -202,7 +212,16 @@ run_claude_code() {
 }
 
 build_base_docker_image() {
+  local platform="${1:-}"
   local base_tag="claude-in-a-box-base:$version"
+  local platform_args=()
+
+  # Append platform suffix to tag when cross-compiling
+  if [[ -n "$platform" ]]; then
+    local platform_suffix="${platform#*/}"  # Extract "amd64" from "linux/amd64"
+    base_tag="claude-in-a-box-base:$version-$platform_suffix"
+    platform_args=(--platform "$platform")
+  fi
 
   if docker image inspect "$base_tag" &>/dev/null; then
     echo -e "\t✅ Base image '$base_tag' already exists."
@@ -214,6 +233,7 @@ build_base_docker_image() {
     (
       cd "$script_dir/docker"
       docker build --no-cache \
+        "${platform_args[@]}" \
         --build-arg TZ="$current_timezone" \
         -t "$base_tag" \
         -f Dockerfile.base .
@@ -224,34 +244,43 @@ build_base_docker_image() {
 build_variant_docker_image() {
   local variant="$1"
   local variant_tag="$docker_image:${variant}-$version"
-  local base_tag="claude-in-a-box-base:$version"
+  local base_version="$version"
+  local platform=""
+  local platform_args=()
 
-  # First ensure base image exists
-  build_base_docker_image
-
+  # Check if variant image already exists first - skip all building if so
   if docker image inspect "$variant_tag" &>/dev/null; then
     echo -e "\t✅ Variant image '$variant_tag' already exists."
-  else
-    echo -e "\t🔧 Building $variant variant Docker image '$variant_tag'..."
-    local current_timezone
-    current_timezone="$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')"
-
-    local host_arch
-    host_arch="$(uname -m)"
-
-    if [[ "$variant" == "flutter" && ("$host_arch" == "arm64" || "$host_arch" == "aarch64") ]]; then
-      echo -e "\t🍎 Apple Silicon detected - building linux/amd64 image (runs via Rosetta)"
-    fi
-
-    (
-      cd "$script_dir/docker"
-      docker build --no-cache \
-        --build-arg VERSION="$version" \
-        --build-arg TZ="$current_timezone" \
-        -t "$variant_tag" \
-        -f "Dockerfile.$variant" .
-    )
+    return 0
   fi
+
+  # Determine if cross-platform build is needed
+  local host_arch
+  host_arch="$(uname -m)"
+
+  if [[ "$variant" == "flutter" && ("$host_arch" == "arm64" || "$host_arch" == "aarch64") ]]; then
+    echo -e "\t🍎 Apple Silicon detected - building linux/amd64 image (runs via Rosetta)"
+    platform="linux/amd64"
+    platform_args=(--platform "$platform")
+    base_version="$version-amd64"
+  fi
+
+  # Ensure base image exists (with correct platform)
+  build_base_docker_image "$platform"
+
+  echo -e "\t🔧 Building $variant variant Docker image '$variant_tag'..."
+  local current_timezone
+  current_timezone="$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')"
+
+  (
+    cd "$script_dir/docker"
+    docker build --no-cache \
+      "${platform_args[@]}" \
+      --build-arg VERSION="$base_version" \
+      --build-arg TZ="$current_timezone" \
+      -t "$variant_tag" \
+      -f "Dockerfile.$variant" .
+  )
 }
 
 
